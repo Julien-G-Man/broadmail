@@ -1,0 +1,57 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --brand: #1a1a2e;
+    --brand-accent: #e94560;
+    --surface: #ffffff;
+    --surface-2: #f8f8f8;
+    --surface-3: #f0f0f0;
+    --border: #e5e5e5;
+    --text-primary: #111111;
+    --text-secondary: #666666;
+    --text-muted: #999999;
+    --success: #16a34a;
+    --warning: #d97706;
+    --error: #dc2626;
+    --radius: 0.5rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-surface text-text-primary font-sans;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-white border border-border rounded-lg shadow-sm;
+  }
+
+  .btn-primary {
+    @apply bg-brand text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-opacity-90 transition-colors;
+  }
+
+  .btn-accent {
+    @apply bg-brand-accent text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-opacity-90 transition-colors;
+  }
+
+  .btn-ghost {
+    @apply bg-transparent text-text-secondary px-4 py-2 rounded-md text-sm font-medium hover:bg-surface-2 transition-colors;
+  }
+
+  .input {
+    @apply w-full border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent;
+  }
+
+  .status-badge {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+}
