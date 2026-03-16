@@ -1,6 +1,5 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import field_validator
-from typing import list as List
+from pydantic import field_validator, model_validator
 
 
 class Settings(BaseSettings):
@@ -36,9 +35,36 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+    @field_validator("TRACKING_BASE_URL", mode="before")
+    @classmethod
+    def ensure_tracking_base_url_has_trailing_slash(cls, value: str) -> str:
+        value = (value or "").strip()
+        if not value:
+            return value
+        return value if value.endswith("/") else f"{value}/"
+
+    @model_validator(mode="after")
+    def validate_production_settings(self):
+        if self.APP_ENV.lower() != "production":
+            return self
+
+        if not self.SECRET_KEY or self.SECRET_KEY == "change-me-in-production":
+            raise ValueError("SECRET_KEY must be set to a strong value in production")
+
+        if not self.UNSUBSCRIBE_SECRET or self.UNSUBSCRIBE_SECRET == "change-me-unsubscribe-secret":
+            raise ValueError("UNSUBSCRIBE_SECRET must be set to a strong value in production")
+
+        origins = [o for o in self.allowed_origins_list if o]
+        if not origins:
+            raise ValueError("ALLOWED_ORIGINS must include at least one origin in production")
+        if "*" in origins:
+            raise ValueError("ALLOWED_ORIGINS cannot contain '*' in production")
+
+        return self
+
     @property
     def allowed_origins_list(self) -> list[str]:
-        return [o.strip() for o in self.ALLOWED_ORIGINS.split(",")]
+        return [o.strip() for o in self.ALLOWED_ORIGINS.split(",") if o.strip()]
 
 
 settings = Settings()

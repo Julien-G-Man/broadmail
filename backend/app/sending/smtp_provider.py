@@ -19,9 +19,11 @@ class SMTPProvider(BaseEmailProvider):
     async def send_batch(self, messages: list[EmailMessage]) -> list[SendResult]:
         results = []
         try:
-            smtp = aiosmtplib.SMTP(hostname=self.host, port=self.port, use_tls=self.use_tls)
+            # use_tls=True means SMTPS (port 465, SSL from the start).
+            # For STARTTLS (port 587), connect without SSL then call starttls().
+            smtp = aiosmtplib.SMTP(hostname=self.host, port=self.port)
             await smtp.connect()
-            if not self.use_tls:
+            if self.use_tls:
                 await smtp.starttls()
             await smtp.login(self.username, self.password)
 

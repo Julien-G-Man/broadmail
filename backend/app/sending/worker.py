@@ -1,4 +1,5 @@
 """ARQ worker for processing campaign email sends."""
+import re
 import uuid
 from datetime import datetime, timezone
 
@@ -36,6 +37,27 @@ def inject_tracking_pixel(html: str, campaign_id: str, contact_id: str) -> str:
     if "</body>" in html:
         return html.replace("</body>", f"{pixel}</body>")
     return html + pixel
+
+
+def wrap_links(html: str, campaign_id: str, contact_id: str) -> str:
+    """Replace every <a href="..."> with a click-tracking redirect URL."""
+    from app.core.security import create_tracking_token
+
+    def replace_href(match: re.Match) -> str:
+        original_url = match.group(1)
+        # Don't wrap the unsubscribe link or mailto/tel links
+        if original_url.startswith(("mailto:", "tel:", "#")):
+            return match.group(0)
+        if "unsubscribe" in original_url:
+            return match.group(0)
+        token = create_tracking_token(
+            {"campaign_id": campaign_id, "contact_id": contact_id, "url": original_url},
+            expire_minutes=60 * 24 * 90,  # 90 days
+        )
+        redirect_url = f"{settings.TRACKING_BASE_URL}track/click/{token}"
+        return f'href="{redirect_url}"'
+
+    return re.sub(r'href="([^"]+)"', replace_href, html)
 
 
 def inject_unsubscribe_link(html: str, contact_id: str) -> str:
@@ -125,6 +147,7 @@ async def process_campaign(ctx, campaign_id: str):
 
                     # Inject tracking
                     html = inject_tracking_pixel(rendered.html, campaign_id, str(contact.id))
+                    html = wrap_links(html, campaign_id, str(contact.id))
                     html = inject_unsubscribe_link(html, str(contact.id))
 
                     msg = EmailMessage(

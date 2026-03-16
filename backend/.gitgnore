@@ -1,0 +1,3 @@
+mailenv
+mailenv/
+.env

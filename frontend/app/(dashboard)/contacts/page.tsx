@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useContacts, useDeleteContact } from "@/hooks/useContacts";
+import { useContacts, useCreateContact, useDeleteContact } from "@/hooks/useContacts";
 import { formatDate } from "@/lib/utils";
-import { Search, UserPlus, Upload, Trash2, AlertCircle } from "lucide-react";
+import { Search, UserPlus, Upload, Trash2, AlertCircle, Loader2, X } from "lucide-react";
 import { toast } from "sonner";
 import ContactImportModal from "@/components/contacts/ContactImportModal";
 
@@ -12,9 +12,25 @@ export default function ContactsPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [showImport, setShowImport] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+  const [newFirst, setNewFirst] = useState("");
+  const [newLast, setNewLast] = useState("");
 
   const { data, isLoading, refetch } = useContacts({ page, search: search || undefined });
   const deleteContact = useDeleteContact();
+  const createContact = useCreateContact();
+
+  const handleCreate = async () => {
+    if (!newEmail.trim()) return;
+    try {
+      await createContact.mutateAsync({ email: newEmail.trim(), first_name: newFirst.trim() || undefined, last_name: newLast.trim() || undefined });
+      toast.success("Contact added");
+      setNewEmail(""); setNewFirst(""); setNewLast(""); setShowCreate(false);
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || "Failed to add contact");
+    }
+  };
 
   const handleDelete = async (id: string, email: string) => {
     if (!confirm(`Delete contact ${email}?`)) return;
@@ -44,12 +60,40 @@ export default function ContactsPage() {
             <Upload className="w-4 h-4" />
             Import CSV
           </button>
-          <Link href="/contacts/new" className="btn-primary flex items-center gap-2">
+          <button onClick={() => setShowCreate(true)} className="btn-primary flex items-center gap-2">
             <UserPlus className="w-4 h-4" />
             Add Contact
-          </Link>
+          </button>
         </div>
       </div>
+
+      {/* Inline create form */}
+      {showCreate && (
+        <div className="card p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-medium text-sm">Add Contact</h3>
+            <button onClick={() => setShowCreate(false)} className="text-text-muted hover:text-text-primary">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <input placeholder="Email *" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} className="input" type="email" />
+            <input placeholder="First name" value={newFirst} onChange={(e) => setNewFirst(e.target.value)} className="input" />
+            <input placeholder="Last name" value={newLast} onChange={(e) => setNewLast(e.target.value)} className="input" />
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => setShowCreate(false)} className="btn-ghost border border-border text-sm">Cancel</button>
+            <button
+              onClick={handleCreate}
+              disabled={!newEmail.trim() || createContact.isPending}
+              className="btn-primary text-sm flex items-center gap-2 disabled:opacity-50"
+            >
+              {createContact.isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              Add Contact
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Search */}
       <div className="relative">
@@ -86,7 +130,11 @@ export default function ContactsPage() {
             <tbody className="divide-y divide-border">
               {data?.items.map((contact) => (
                 <tr key={contact.id} className="hover:bg-surface-2 transition-colors">
-                  <td className="px-4 py-3 font-mono text-xs">{contact.email}</td>
+                  <td className="px-4 py-3">
+                    <Link href={`/contacts/${contact.id}`} className="font-mono text-xs text-brand hover:underline">
+                      {contact.email}
+                    </Link>
+                  </td>
                   <td className="px-4 py-3 text-text-secondary">
                     {[contact.first_name, contact.last_name].filter(Boolean).join(" ") || "—"}
                   </td>

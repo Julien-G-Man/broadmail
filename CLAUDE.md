@@ -198,7 +198,7 @@ broadmail/
     ├── types/
     │   └── index.ts                   # Shared TypeScript types
     ├── .env.local.example
-    └── next.config.ts
+    └── next.config.mjs
 ```
 
 -----

@@ -26,13 +26,14 @@ Broadmail is a self-hosted bulk email platform for sending newsletters, event an
 
 ## Features
 
-- **Contact management** — import from CSV/XLSX, tag contacts into lists, manage suppression (bounces, unsubscribes)
-- **Email templates** — rich text editor (Tiptap) with Jinja2 variable injection and live preview
+- **Contact management** — import from CSV/XLSX, tag contacts into lists, manage suppression (bounces, unsubscribes); full contact detail page with event history
+- **Email templates** — rich text editor (Tiptap) with Jinja2 variable injection, live preview, and edit page
 - **Campaigns** — 3-step wizard, immediate or scheduled send, status tracking
 - **Batch sending** — always sends in batches of 50; Resend primary, SMTP fallback
-- **Analytics** — open tracking (pixel), click tracking (redirect), per-campaign stats dashboard
+- **Analytics** — open tracking (1×1 pixel), click tracking (JWT-signed redirect links injected at send time), per-campaign stats dashboard
 - **Webhooks** — Resend event ingestion (bounce, complaint, delivery)
 - **Unsubscribe** — one-click, honoured at the worker level, not just the UI
+- **List detail pages** — browse and remove members from any contact list
 
 ---
 
@@ -59,9 +60,25 @@ broadmail/
 └── frontend/
     ├── app/
     │   ├── (auth)/login/
-    │   └── (dashboard)/   # contacts, templates, campaigns, settings
+    │   └── (dashboard)/
+    │       ├── page.tsx               # dashboard overview
+    │       ├── contacts/
+    │       │   ├── page.tsx           # list + search + import + add contact
+    │       │   ├── [id]/page.tsx      # contact detail + event history
+    │       │   └── lists/
+    │       │       ├── page.tsx       # all lists
+    │       │       └── [id]/page.tsx  # list detail + members
+    │       ├── templates/
+    │       │   ├── page.tsx           # template gallery
+    │       │   ├── new/page.tsx       # create template
+    │       │   └── [id]/edit/page.tsx # edit template
+    │       ├── campaigns/
+    │       │   ├── page.tsx           # campaigns table
+    │       │   ├── new/page.tsx       # 3-step wizard
+    │       │   └── [id]/page.tsx      # campaign detail + analytics chart
+    │       └── settings/page.tsx      # admin user management
     ├── components/
-    ├── hooks/
+    ├── hooks/             # useContacts, useTemplates, useCampaigns (+ list/event hooks)
     ├── lib/               # api.ts, auth.ts, utils.ts
     └── types/
 ```
@@ -125,10 +142,10 @@ RESEND_API_KEY=re_xxxxxxxxxxxx
 RESEND_WEBHOOK_SECRET=whsec_xxxxxxxxxxxx
 
 SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
+SMTP_PORT=587          # 587 = STARTTLS (most providers); 465 = SMTPS
 SMTP_USER=yourorg@gmail.com
 SMTP_PASSWORD=app-specific-password
-SMTP_USE_TLS=true
+SMTP_USE_TLS=true      # true → STARTTLS upgrade after connect (correct for port 587)
 
 TRACKING_BASE_URL=https://your-backend-domain/
 UNSUBSCRIBE_SECRET=<separate long random string>
@@ -156,6 +173,8 @@ NEXT_PUBLIC_API_URL=https://your-backend-domain
 | Provider order | Resend first, SMTP fallback — never both simultaneously |
 | Suppression | Honoured at the worker level; suppressed contacts can never receive email |
 | Secrets | Environment variables only — no hardcoded credentials |
+| Redis unavailable | `POST /campaigns/{id}/send` returns `503` — never silently drops the job |
+| Click tracking | All `<a href>` links are replaced with JWT-signed redirect URLs at send time |
 
 ---
 
@@ -166,25 +185,50 @@ POST   /api/auth/login
 POST   /api/auth/refresh
 GET    /api/auth/me
 
+# Auth
+POST   /api/auth/login          POST /api/auth/refresh
+POST   /api/auth/logout         GET  /api/auth/me
+
+# Users (admin only)
+GET    /api/users               POST /api/users
+PATCH  /api/users/{id}          DELETE /api/users/{id}
+POST   /api/users/{id}/reset-password
+
+# Contacts
 GET    /api/contacts            POST /api/contacts
-POST   /api/contacts/import     (CSV or XLSX upload)
+GET    /api/contacts/{id}       PATCH /api/contacts/{id}
+DELETE /api/contacts/{id}
+POST   /api/contacts/import     (CSV or XLSX multipart upload)
 
+# Lists
 GET    /api/lists               POST /api/lists
-GET    /api/lists/{id}/contacts POST /api/lists/{id}/contacts
+GET    /api/lists/{id}          PATCH /api/lists/{id}
+DELETE /api/lists/{id}
+GET    /api/lists/{id}/contacts
+POST   /api/lists/{id}/contacts              (add by contact ID array)
+DELETE /api/lists/{id}/contacts/{contact_id}
 
+# Templates
 GET    /api/templates           POST /api/templates
+GET    /api/templates/{id}      PATCH /api/templates/{id}
+DELETE /api/templates/{id}
 POST   /api/templates/{id}/preview
 
+# Campaigns
 GET    /api/campaigns           POST /api/campaigns
-POST   /api/campaigns/{id}/send
+GET    /api/campaigns/{id}      PATCH /api/campaigns/{id}
+DELETE /api/campaigns/{id}
+POST   /api/campaigns/{id}/send       (returns 503 if Redis unavailable)
 POST   /api/campaigns/{id}/schedule
+POST   /api/campaigns/{id}/cancel
 GET    /api/campaigns/{id}/analytics
+GET    /api/campaigns/{id}/recipients
 
+# Analytics & Tracking
 GET    /api/analytics/overview
-
-GET    /track/open              (pixel, no auth)
-GET    /track/click/{token}     (redirect, no auth)
-GET    /unsubscribe/{token}     (no auth)
+GET    /track/open              (1×1 GIF pixel, no auth)
+GET    /track/click/{token}     (302 redirect, no auth)
+GET    /unsubscribe/{token}     (HTML page, no auth)
 
 POST   /webhooks/resend
 GET    /health
@@ -202,7 +246,9 @@ Full route reference in [`CLAUDE.md`](./CLAUDE.md).
 - **CORS**: exact frontend domain only — never `*`
 - **Template XSS**: HTML sanitised with `bleach` before storage
 - **Webhooks**: Resend signature verified via `svix`
-- **Tracking URLs**: HMAC-signed tokens — no plaintext contact IDs in URLs
+- **Tracking URLs**: JWT-signed tokens — no plaintext contact IDs in URLs
+- **Click links**: All `<a href>` links in outgoing HTML are wrapped with 90-day JWT redirect tokens; `mailto:`, `tel:`, `#`, and unsubscribe links are left unwrapped
+- **SMTP**: `SMTP_USE_TLS=true` triggers STARTTLS after plain connect (correct for port 587). For SMTPS on port 465 set `SMTP_USE_TLS=false` and configure the port accordingly
 
 ---
 

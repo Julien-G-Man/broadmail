@@ -89,15 +89,17 @@ async def send_campaign(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # Enqueue ARQ job
+    # Enqueue ARQ job — per spec, return 503 if Redis is unavailable
     try:
         from app.core.config import settings
         import arq
+        import structlog
         redis = await arq.create_pool(arq.connections.RedisSettings.from_dsn(settings.REDIS_URL))
         await redis.enqueue_job("process_campaign", str(campaign_id))
         await redis.aclose()
-    except Exception:
-        pass  # Will be retried by scheduler; don't fail the request
+    except Exception as e:
+        structlog.get_logger().error("arq_enqueue_failed", campaign_id=str(campaign_id), error=str(e))
+        raise HTTPException(status_code=503, detail="Queue unavailable — please retry shortly")
 
     return campaign
 

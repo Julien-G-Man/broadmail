@@ -11,13 +11,15 @@ from app.auth.schemas import (
 from app.auth.service import authenticate_user, create_tokens, rotate_refresh_token, revoke_token
 from app.core.database import get_db
 from app.core.dependencies import get_current_active_user
+from app.core.rate_limit import limiter
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
-    user = await authenticate_user(db, request.email, request.password)
+@limiter.limit("5/minute")
+async def login(request: Request, payload: LoginRequest, db: AsyncSession = Depends(get_db)):
+    user = await authenticate_user(db, payload.email, payload.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
