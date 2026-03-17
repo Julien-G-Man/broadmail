@@ -18,8 +18,14 @@ import app.analytics.models  # noqa
 
 config = context.config
 
-# Override sqlalchemy.url with our settings
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+# Override sqlalchemy.url with our settings — normalise to async driver
+_db_url = settings.DATABASE_URL
+if _db_url.startswith("postgresql://") or _db_url.startswith("postgres://"):
+    _db_url = _db_url.replace("://", "+asyncpg://", 1)
+# Strip ?sslmode from URL — passed via connect_args instead
+for _ssl_param in ("?sslmode=require", "&sslmode=require", "?sslmode=verify-full", "&sslmode=verify-full"):
+    _db_url = _db_url.replace(_ssl_param, "")
+config.set_main_option("sqlalchemy.url", _db_url)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -46,10 +52,12 @@ def do_run_migrations(connection: Connection) -> None:
 
 
 async def run_async_migrations() -> None:
+    _needs_ssl = "neon.tech" in _db_url or "sslmode" in settings.DATABASE_URL
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args={"ssl": "require"} if _needs_ssl else {},
     )
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
