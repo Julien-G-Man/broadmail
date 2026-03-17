@@ -68,6 +68,10 @@ app.include_router(analytics_router)
 app.include_router(webhooks_router)
 
 
+@app.get("/")
+async def root():
+    return {"status": "BroadMail API is live. Got to /docs to see API docs."}
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
