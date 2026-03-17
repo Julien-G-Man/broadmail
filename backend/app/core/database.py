@@ -7,25 +7,25 @@ from app.core.config import settings
 def _normalise_url(url: str) -> tuple[str, dict]:
     """Return (normalised_url, connect_args) for the given DATABASE_URL.
 
-    - Strips ?sslmode=... from the URL (asyncpg ignores it and may error)
-    - Passes ssl='require' as a connect_arg for Neon / any SSL Postgres
+    asyncpg does not accept query-string parameters like sslmode or
+    channel_binding — strip the entire query string and pass ssl via
+    connect_args instead.
     """
+    from urllib.parse import urlparse, urlunparse, parse_qs
+
     connect_args: dict = {}
 
     if url.startswith("postgresql://") or url.startswith("postgres://"):
         url = url.replace("://", "+asyncpg://", 1)
 
     if url.startswith("postgresql+asyncpg://"):
-        # asyncpg needs ssl passed as connect_arg, not in URL query string
-        if "sslmode=require" in url or "sslmode=verify-full" in url:
-            url = (
-                url
-                .replace("?sslmode=require", "")
-                .replace("&sslmode=require", "")
-                .replace("?sslmode=verify-full", "")
-                .replace("&sslmode=verify-full", "")
-            )
+        parsed = urlparse(url)
+        params = parse_qs(parsed.query)
+        sslmode = params.get("sslmode", [""])[0]
+        if sslmode in ("require", "verify-full", "verify-ca"):
             connect_args["ssl"] = "require"
+        # Drop ALL query-string params — asyncpg handles none of them
+        url = urlunparse(parsed._replace(query=""))
 
     return url, connect_args
 
