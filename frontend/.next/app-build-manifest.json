@@ -1,9 +1,9 @@
 {
   "pages": {
-    "/(dashboard)/page": [
+    "/(dashboard)/contacts/lists/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/(dashboard)/page.js"
+      "static/chunks/app/(dashboard)/contacts/lists/page.js"
     ],
     "/(dashboard)/layout": [
       "static/chunks/webpack.js",
@@ -16,35 +16,10 @@
       "static/css/app/layout.css",
       "static/chunks/app/layout.js"
     ],
-    "/(dashboard)/campaigns/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/(dashboard)/campaigns/page.js"
-    ],
     "/(dashboard)/contacts/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/(dashboard)/contacts/page.js"
-    ],
-    "/(dashboard)/contacts/lists/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/(dashboard)/contacts/lists/page.js"
-    ],
-    "/(dashboard)/templates/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/(dashboard)/templates/page.js"
-    ],
-    "/(dashboard)/templates/new/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/(dashboard)/templates/new/page.js"
-    ],
-    "/(dashboard)/contacts/lists/[id]/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/(dashboard)/contacts/lists/[id]/page.js"
     ]
   }
 }

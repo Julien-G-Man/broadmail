@@ -7,3 +7,8 @@ mailenv
 __pycache__/
 __pycache__
 node_modules/
+broadmail.db
+backend/broadmail.db
+.pytest_cache/
+.pytest_cache
+.next/

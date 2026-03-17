@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useContacts, useCreateContact, useDeleteContact } from "@/hooks/useContacts";
 import { formatDate } from "@/lib/utils";
@@ -26,6 +26,7 @@ function ini(email: string, first?: string | null, last?: string | null) {
 
 export default function ContactsPage() {
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
   const [showImport, setShowImport] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
@@ -33,7 +34,16 @@ export default function ContactsPage() {
   const [first, setFirst] = useState("");
   const [last, setLast] = useState("");
 
-  const { data, isLoading, refetch } = useContacts({ page, search: search || undefined });
+  // Debounce: only fire the API call 350ms after the user stops typing
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const { data, isLoading, refetch } = useContacts({ page, search: debouncedSearch || undefined });
   const del = useDeleteContact();
   const create = useCreateContact();
 
@@ -62,7 +72,7 @@ export default function ContactsPage() {
             type="search"
             placeholder="Search contacts…"
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            onChange={(e) => setSearch(e.target.value)}
             className="input pl-8"
           />
         </div>
@@ -117,7 +127,7 @@ export default function ContactsPage() {
         ) : data?.items.length === 0 ? (
           <div className="py-20 text-center">
             <p className="text-sm text-text-secondary">
-              {search ? "No contacts match your search." : "No contacts yet."}
+              {debouncedSearch ? `No contacts match "${debouncedSearch}".` : "No contacts yet."}
             </p>
             {!search && (
               <button onClick={() => setShowImport(true)}

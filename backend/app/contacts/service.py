@@ -1,12 +1,10 @@
 import io
 import uuid
-from datetime import datetime, timezone
-
 import pandas as pd
+from datetime import datetime, timezone
 from fastapi import UploadFile
 from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.contacts.models import Contact, ContactList, ContactListMembership
 from app.contacts.schemas import ContactCreate, ContactUpdate, ListCreate, ListUpdate, ImportResult
 
@@ -116,18 +114,28 @@ async def suppress_contact(
 async def import_from_file(
     db: AsyncSession, file: UploadFile, list_id: uuid.UUID | None
 ) -> ImportResult:
+    from fastapi import HTTPException
     contents = await file.read()
     filename = file.filename or ""
 
     if filename.endswith(".xlsx") or filename.endswith(".xls"):
         df = pd.read_excel(io.BytesIO(contents), sheet_name=0)
     else:
-        df = pd.read_csv(io.BytesIO(contents), encoding="utf-8-sig")
+        # sep=None + engine='python' lets pandas auto-detect comma, semicolon, tab, etc.
+        df = pd.read_csv(io.BytesIO(contents), encoding="utf-8-sig", sep=None, engine="python")
 
     df.columns = df.columns.str.lower().str.strip()
-    df = df.dropna(subset=["email"])
 
-    assert "email" in df.columns, "File must have an 'email' column"
+    if "email" not in df.columns:
+        found = ", ".join(f'"{c}"' for c in df.columns[:10])
+        raise HTTPException(
+            status_code=422,
+            detail=f'No "email" column found. Columns in your file: {found}. Rename the email column to "email" and re-upload.'
+        )
+
+    df = df.dropna(subset=["email"])
+    # Also drop rows where email is literally an empty string
+    df = df[df["email"].astype(str).str.strip() != ""]
 
     created = skipped = invalid = 0
     for _, row in df.iterrows():

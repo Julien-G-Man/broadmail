@@ -58,11 +58,16 @@ export default function ContactImportModal({ onClose, onSuccess, defaultListId }
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      const { created, skipped, invalid } = res.data;
-      const parts = [`${created} added`];
-      if (skipped) parts.push(`${skipped} skipped`);
-      if (invalid) parts.push(`${invalid} invalid`);
-      toast.success(`Import complete — ${parts.join(", ")}`);
+      const { created, skipped, invalid, total } = res.data;
+      if (total === 0) {
+        toast.warning('No contacts found in file. Make sure the file has an "email" column with data.');
+      } else {
+        const parts: string[] = [];
+        if (created) parts.push(`${created} added`);
+        if (skipped) parts.push(`${skipped} already existed`);
+        if (invalid) parts.push(`${invalid} invalid emails`);
+        toast.success(`Import complete — ${parts.join(", ") || "0 new contacts"}`);
+      }
       onSuccess(listId);
     } catch (err: any) {
       toast.error(err.response?.data?.detail || "Import failed");

@@ -3,6 +3,7 @@
 Base URL: `https://your-backend-domain`
 
 All protected routes require: `Authorization: Bearer <access_token>`
+In dev mode (auth disabled), all routes work without a token.
 
 ---
 
@@ -78,7 +79,7 @@ Deactivates user (sets `is_active=false`). Response 204.
 ## Contacts
 
 ### `GET /api/contacts`
-Query params: `page` (default 1), `page_size` (default 50), `search`, `list_id`, `suppressed` (bool)
+Query params: `page` (default 1), `page_size` (default 50), `search` (matches email, first_name, last_name), `list_id`, `suppressed` (bool)
 ```json
 // Response 200
 {
@@ -105,11 +106,16 @@ Query params: `page` (default 1), `page_size` (default 50), `search`, `list_id`,
 ```json
 // Response 200
 { "created": 45, "skipped": 5, "invalid": 2, "total": 52 }
+
+// Response 422 — if email column missing
+{ "detail": "No \"email\" column found. Columns in your file: \"name\", \"phone\". Rename the email column to \"email\" and re-upload." }
 ```
 CSV requirements:
-- Required column: `email`
+- Required column: `email` (case-insensitive — "Email", "EMAIL" all work)
 - Optional: `first_name`, `last_name`
 - Any other column → stored in `custom_fields` JSONB
+- Separator auto-detected (comma, semicolon, tab)
+- Encoding: UTF-8 with or without BOM
 
 ---
 
@@ -141,13 +147,22 @@ CSV requirements:
 {
   "name": "Monthly Newsletter",
   "subject": "Hello {{ first_name }}, your update is here",
-  "html_body": "<p>Dear {{ first_name }},</p>...",
-  "text_body": "Dear {{ first_name }},..."
+  "html_body": "<!DOCTYPE html><html>...</html>",
+  "text_body": "Dear {{ first_name }},... (optional)",
+  "mode": "text"
 }
 ```
+`mode`: `"text"` (default) or `"custom"`.
+- `"text"` — content is sanitized with bleach (inline styles stripped)
+- `"custom"` — HTML stored as-is (inline styles, web images, full HTML allowed)
+
 ### `GET /api/templates/{id}` → `TemplateRead`
 ### `PATCH /api/templates/{id}` → `TemplateRead`
-### `DELETE /api/templates/{id}` → 204
+### `DELETE /api/templates/{id}`
+```
+204 — deleted
+409 — template is still referenced by one or more campaigns; delete those first
+```
 
 ### `POST /api/templates/{id}/preview`
 ```json
@@ -257,4 +272,8 @@ Handled events:
 ```json
 { "status": "ok" }
 ```
-Used by Railway uptime monitor.
+
+### `GET /`
+```json
+{ "status": "BroadMail API is live. Got to /docs to see API docs." }
+```

@@ -10,11 +10,11 @@ app/
     ├── layout.tsx                   No-auth shell: Sidebar + TopBar
     ├── page.tsx                     Dashboard overview
     ├── contacts/
-    │   ├── page.tsx                 Contacts table + search + import
+    │   ├── page.tsx                 Contacts table + debounced search + import
     │   ├── [id]/page.tsx            Contact detail + event history
     │   └── lists/
     │       ├── page.tsx             Contact lists
-    │       └── [id]/page.tsx        List detail + member table
+    │       └── [id]/page.tsx        List detail + member table + "Import to this list" button
     ├── templates/
     │   ├── page.tsx                 Template list (row layout)
     │   ├── new/page.tsx             Template builder
@@ -53,7 +53,7 @@ When auth is re-enabled:
 - Recent campaigns list with status pills and skeleton loaders
 
 ### Contacts (`/contacts`)
-- Paginated table, avatar initials, search input
+- Paginated table, avatar initials, debounced search (350ms) on email + first_name + last_name
 - Inline "Add Contact" form (toggle)
 - "Import CSV" button opens `ContactImportModal`
 - Hover-reveal delete button
@@ -69,18 +69,33 @@ When auth is re-enabled:
 
 ### List Detail (`/contacts/lists/[id]`)
 - List header with member count
+- **"Import to this list" button** — opens `ContactImportModal` pre-set to this list
 - Paginated member table
 - Remove-from-list button per row
 
 ### Templates (`/templates`)
 - Row layout: avatar initials, name, variable chips, subject preview, date
 - Hover-reveal Edit / Delete actions
+- Delete shows `409` error message if template is in use by a campaign
 
 ### Template Editor (`/templates/new`, `/templates/[id]/edit`)
-- Tiptap rich text editor (Bold, Italic, H2, Bullet List)
-- Subject line input (supports `{{ variables }}`)
-- Variable picker buttons insert at cursor
-- Save → `POST /api/templates` or `PATCH /api/templates/{id}`
+Two modes selected by tab at the top:
+
+**Text only mode:**
+- Plain textarea for email body content
+- Supports `{{ first_name }}`, `{{ last_name }}`, `{{ email }}` variables
+- Variable chip buttons insert at cursor
+- Live iframe preview wraps text in a simple HTML shell
+
+**Custom HTML mode:**
+- Dark monospace textarea for raw HTML/CSS
+- Full control: inline styles, web images via URL, any HTML
+- Live iframe preview updates as you type
+- **Fullscreen** button opens preview at full viewport
+- Variable chip buttons insert at cursor position
+- HTML is stored as-is (not sanitized)
+
+Save → `POST /api/templates` or `PATCH /api/templates/{id}`
 
 ### Campaigns (`/campaigns`)
 - Row layout: avatar, name, from name, status pill, recipients, date
@@ -119,15 +134,25 @@ When auth is re-enabled:
 ### `components/contacts/ContactImportModal.tsx`
 - Dropzone (CSV / XLSX)
 - Three list modes: **New list** (type a name, creates it first), **Existing list** (dropdown), **No list**
+- Accepts `defaultListId` prop — when set, pre-selects "Existing list" mode with that list
 - POSTs file to `/api/contacts/import?list_id=...`
-- Shows `N created, N skipped, N invalid` result
+- Shows result: `N added, N already existed, N invalid emails`
+- Shows warning toast if total=0 with hint to check the email column
+
+### `components/templates/TemplateEditor.tsx`
+- Mode tabs: **Text only** | **Custom HTML**
+- Variable chip buttons that insert at cursor (works in both modes)
+- Left pane: textarea (plain for text mode, dark monospace for HTML mode)
+- Right pane: live `<iframe srcDoc={...}>` preview (updates on every keystroke)
+- Fullscreen overlay: full-viewport iframe with close button
+- On switch text→custom: pre-populates HTML editor with a basic HTML shell wrapping the text
 
 ---
 
 ## Hooks
 
 ### `useContacts.ts`
-- `useContacts(params)` — paginated list with search/filter
+- `useContacts(params)` — paginated list with search/filter (search debounced at page level)
 - `useContact(id)` — single contact + events
 - `useContactEvents(id)` — email event history
 - `useCreateContact()` / `useUpdateContact()` / `useDeleteContact()`
@@ -148,7 +173,7 @@ When auth is re-enabled:
 ## Styling
 
 ### Tailwind
-Custom design tokens defined in `tailwind.config.ts` (required — utility classes read from here, not from CSS variables):
+Custom design tokens defined in `tailwind.config.ts`:
 
 ```ts
 colors: {

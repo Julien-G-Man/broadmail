@@ -13,7 +13,9 @@ Key settings:
 - `allowed_origins_list` — parsed from comma-separated `ALLOWED_ORIGINS`
 
 ### `database.py`
-- Async SQLAlchemy engine with `asyncpg` driver
+- Async SQLAlchemy engine with `asyncpg` driver for PostgreSQL, `aiosqlite` for local dev
+- `_normalise_url()` — strips Neon query-string params, rewrites `postgresql://` → `postgresql+asyncpg://`
+- Pool settings (`pool_size`, `max_overflow`, `pool_pre_ping`) are skipped for SQLite automatically
 - `AsyncSessionLocal` session factory
 - `Base` — all ORM models inherit from this
 - `get_db()` FastAPI dependency — yields a session, commits on success, rolls back on exception
@@ -27,10 +29,12 @@ Key settings:
 - `create_unsubscribe_token` / `decode_unsubscribe_token` — 10-year JWT, separate secret
 
 ### `dependencies.py`
-FastAPI `Depends` functions:
-- `get_current_user` — extracts + validates Bearer JWT, loads User from DB
-- `get_current_active_user` — wraps above, checks `is_active`
-- `require_admin` — wraps above, checks `role == "admin"`
+FastAPI `Depends` functions — **currently stubbed for dev mode** (auth disabled):
+- `get_current_user` — returns dummy admin `SimpleNamespace(id=None, role="admin", ...)`
+- `get_current_active_user` — same
+- `require_admin` — same
+
+`id=None` so that `created_by` writes `NULL` (FK is nullable). Re-enable by restoring real implementations.
 
 ### `exceptions.py`
 Global FastAPI exception handlers registered in `main.py`:
@@ -94,10 +98,11 @@ All require `require_admin`.
 
 ### Service
 Key functions:
-- `import_from_file` — reads CSV/XLSX with pandas, `encoding='utf-8-sig'` (BOM-safe), `dropna(subset=['email'])`, validates email regex, upserts contacts, optionally adds to list
+- `import_from_file` — reads CSV/XLSX with pandas; `sep=None, engine='python'` auto-detects separators (comma, semicolon, tab); `encoding='utf-8-sig'` (BOM-safe); raises `HTTPException(422)` if no `email` column found (shows what columns were found); upserts contacts, optionally adds to list
 - `upsert_contact` — insert if new email, skip if exists
 - `suppress_contact` — sets `is_suppressed=True`, records reason + timestamp
 - `add_to_list` / `remove_from_list` — manages membership table
+- `list_contacts` — supports `search` (ilike on email, first_name, last_name), `list_id` filter, `suppressed` filter, pagination
 
 ### Routes
 ```
@@ -123,10 +128,12 @@ DELETE /api/lists/{id}/contacts/{contact_id}
 ## `templates/`
 
 ### Model
-`EmailTemplate` — `id, name, subject, html_body, text_body, variables (TEXT[]), created_at, updated_at, created_by`
+`EmailTemplate` — `id, name, subject, html_body, text_body, variables (TEXT[]), mode, created_at, updated_at, created_by`
+
+`mode` is `"text"` (default) or `"custom"`. Added in migration `0002_template_mode`.
 
 ### Service
-- `sanitize_html` — `bleach.clean()` with allowed tags/attrs (prevents XSS in sent emails)
+- `_prepare_html(html, mode)` — for `"text"` mode: sanitizes with `bleach.clean()` (no inline styles); for `"custom"` mode: passes HTML through untouched (user has full control)
 - `extract_variables` — regex `\{\{\s*(\w+)\s*\}\}` on html + subject
 - `render_template_with_context` — Jinja2 `autoescape=True`, renders subject + html + text
 - `preview_with_sample` — renders with sample contact data, **never sends email**
@@ -137,9 +144,11 @@ GET    /api/templates
 POST   /api/templates
 GET    /api/templates/{id}
 PATCH  /api/templates/{id}
-DELETE /api/templates/{id}
+DELETE /api/templates/{id}        → 409 if referenced by any campaign
 POST   /api/templates/{id}/preview   (body: {sample_contact: {...}})
 ```
+
+Delete returns `409 Conflict` with a descriptive message if any campaign references this template.
 
 ---
 
