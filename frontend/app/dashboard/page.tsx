@@ -24,10 +24,10 @@ export default function DashboardPage() {
   });
 
   const cards = [
-    { label: "Total Contacts",  value: stats?.total_contacts?.toLocaleString(),   icon: Users,        href: "/contacts", color: "text-violet-500",  bg: "bg-violet-50" },
-    { label: "Campaigns Sent",  value: stats?.total_campaigns?.toLocaleString(),  icon: Send,         href: "/campaigns",color: "text-blue-500",    bg: "bg-blue-50" },
-    { label: "Emails Delivered",value: stats?.total_sent?.toLocaleString(),       icon: TrendingUp,   href: "/campaigns",color: "text-emerald-500", bg: "bg-emerald-50" },
-    { label: "Open Rate",       value: formatPercent(stats?.overall_open_rate??0),icon: MousePointer, href: "/campaigns",color: "text-amber-500",   bg: "bg-amber-50" },
+    { label: "Total Contacts",  value: stats?.total_contacts?.toLocaleString(),   icon: Users,        href: "/dashboard/contacts", color: "text-violet-500",  bg: "bg-violet-50" },
+    { label: "Campaigns Sent",  value: stats?.total_campaigns?.toLocaleString(),  icon: Send,         href: "/dashboard/campaigns",color: "text-blue-500",    bg: "bg-blue-50" },
+    { label: "Emails Delivered",value: stats?.total_sent?.toLocaleString(),       icon: TrendingUp,   href: "/dashboard/campaigns",color: "text-emerald-500", bg: "bg-emerald-50" },
+    { label: "Open Rate",       value: formatPercent(stats?.overall_open_rate??0),icon: MousePointer, href: "/dashboard/campaigns",color: "text-amber-500",   bg: "bg-amber-50" },
   ];
 
   return (
@@ -58,9 +58,9 @@ export default function DashboardPage() {
       {/* Quick start */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { step: "1", label: "Import Contacts", desc: "Upload a CSV or Excel file", href: "/contacts" },
-          { step: "2", label: "Create Template", desc: "Write your email content", href: "/templates/new" },
-          { step: "3", label: "Send Campaign",   desc: "Choose audience and send", href: "/campaigns/new" },
+          { step: "1", label: "Import Contacts", desc: "Upload a CSV or Excel file", href: "/dashboard/contacts" },
+          { step: "2", label: "Create Template", desc: "Write your email content", href: "/dashboard/templates/new" },
+          { step: "3", label: "Send Campaign",   desc: "Choose audience and send", href: "/dashboard/campaigns/new" },
         ].map((a) => (
           <Link key={a.step} href={a.href}>
             <div className="bg-white rounded-xl border border-border p-5 hover:shadow-md transition-all hover:border-brand/30 group cursor-pointer"
