@@ -46,8 +46,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins_list,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 # Exception handlers
@@ -68,7 +68,7 @@ app.include_router(webhooks_router)
 
 @app.get("/")
 async def root():
-    return {"status": "BroadMail API is Live. Go to /docs to see API docs."}
+    return {"status": "BroadMail API is Live."}
 
 @app.get("/health")
 async def health():

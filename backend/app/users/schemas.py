@@ -1,6 +1,14 @@
 from datetime import datetime
 import uuid
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
+
+_MAX_PASSWORD_BYTES = 72  # bcrypt hard limit
+
+
+def _check_password_length(v: str) -> str:
+    if len(v.encode("utf-8")) > _MAX_PASSWORD_BYTES:
+        raise ValueError(f"Password must be {_MAX_PASSWORD_BYTES} characters or fewer")
+    return v
 
 
 class UserCreate(BaseModel):
@@ -8,6 +16,11 @@ class UserCreate(BaseModel):
     name: str
     password: str
     role: str = "sender"
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        return _check_password_length(v)
 
 
 class UserUpdate(BaseModel):
@@ -30,3 +43,8 @@ class UserRead(BaseModel):
 
 class PasswordResetRequest(BaseModel):
     new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        return _check_password_length(v)

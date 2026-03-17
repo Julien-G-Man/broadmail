@@ -13,20 +13,19 @@ async def resend_webhook(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    # Verify Resend webhook signature via svix
-    if settings.RESEND_WEBHOOK_SECRET:
-        try:
-            from svix.webhooks import Webhook, WebhookVerificationError
-            body = await request.body()
-            headers = dict(request.headers)
-            wh = Webhook(settings.RESEND_WEBHOOK_SECRET)
-            payload = wh.verify(body, headers)
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Invalid webhook signature: {e}")
-    else:
+    # Signature verification is mandatory — no unauthenticated fallback.
+    if not settings.RESEND_WEBHOOK_SECRET:
+        raise HTTPException(
+            status_code=503,
+            detail="Webhook secret not configured. Set RESEND_WEBHOOK_SECRET in .env.",
+        )
+    try:
+        from svix.webhooks import Webhook
         body = await request.body()
-        import json
-        payload = json.loads(body)
+        wh = Webhook(settings.RESEND_WEBHOOK_SECRET)
+        payload = wh.verify(body, dict(request.headers))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid webhook signature: {e}")
 
     event_type = payload.get("type", "")
     data = payload.get("data", {})

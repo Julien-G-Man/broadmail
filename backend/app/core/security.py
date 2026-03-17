@@ -2,22 +2,24 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import bcrypt
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from app.core.config import settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
-
+_BCRYPT_ROUNDS = 12
 ALGORITHM = "HS256"
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    # Encode to bytes; bcrypt 4.x raises if > 72 bytes, so truncate safely.
+    encoded = password.encode("utf-8")[:72]
+    return bcrypt.hashpw(encoded, bcrypt.gensalt(rounds=_BCRYPT_ROUNDS)).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    encoded = plain_password.encode("utf-8")[:72]
+    return bcrypt.checkpw(encoded, hashed_password.encode("utf-8"))
 
 
 def create_access_token(data: dict[str, Any], expire_minutes: int | None = None) -> str:
@@ -33,11 +35,13 @@ def create_refresh_token() -> str:
 
 
 def hash_refresh_token(token: str) -> str:
-    return pwd_context.hash(token)
+    encoded = token.encode("utf-8")[:72]
+    return bcrypt.hashpw(encoded, bcrypt.gensalt(rounds=_BCRYPT_ROUNDS)).decode("utf-8")
 
 
 def verify_refresh_token(token: str, token_hash: str) -> bool:
-    return pwd_context.verify(token, token_hash)
+    encoded = token.encode("utf-8")[:72]
+    return bcrypt.checkpw(encoded, token_hash.encode("utf-8"))
 
 
 def decode_access_token(token: str) -> dict[str, Any]:
@@ -60,14 +64,19 @@ def decode_tracking_token(token: str) -> dict[str, Any]:
 
 
 def create_unsubscribe_token(contact_id: str) -> str:
-    # Long-lived token (10 years) — never expires for legal compliance
-    expire = datetime.now(timezone.utc) + timedelta(days=3650)
-    payload = {"sub": contact_id, "type": "unsubscribe", "exp": expire}
+    # No expiry — unsubscribe links must work permanently for legal compliance (CAN-SPAM).
+    # Do NOT add an exp field; python-jose skips exp validation when the claim is absent.
+    payload = {"sub": contact_id, "type": "unsubscribe"}
     return jwt.encode(payload, settings.UNSUBSCRIBE_SECRET, algorithm=ALGORITHM)
 
 
 def decode_unsubscribe_token(token: str) -> str:
-    payload = jwt.decode(token, settings.UNSUBSCRIBE_SECRET, algorithms=[ALGORITHM])
+    payload = jwt.decode(
+        token,
+        settings.UNSUBSCRIBE_SECRET,
+        algorithms=[ALGORITHM],
+        options={"verify_exp": False},  # no exp claim — skip validation
+    )
     if payload.get("type") != "unsubscribe":
         raise JWTError("Invalid token type")
     return payload["sub"]

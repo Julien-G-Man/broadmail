@@ -12,11 +12,13 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) return;
     setLoading(true);
+    setError(null);
     try {
       const result = await signIn("credentials", {
         email,
@@ -27,10 +29,14 @@ export default function LoginPage() {
         router.push("/dashboard");
         router.refresh();
       } else {
-        toast.error("Invalid email or password");
+        const msg = "Invalid email or password. Check your credentials and try again.";
+        setError(msg);
+        toast.error(msg);
       }
     } catch {
-      toast.error("Something went wrong. Try again.");
+      const msg = "Could not reach the server. Make sure the backend is running.";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -142,7 +148,7 @@ export default function LoginPage() {
               <input
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => { setEmail(e.target.value); setError(null); }}
                 placeholder="admin@example.com"
                 required
                 autoFocus
@@ -159,7 +165,7 @@ export default function LoginPage() {
                 <input
                   type={showPassword ? "text" : "password"}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => { setPassword(e.target.value); setError(null); }}
                   placeholder="••••••••"
                   required
                   className="input w-full pr-10"
@@ -173,6 +179,16 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
+
+            {error && (
+              <div
+                className="flex items-start gap-2 rounded-lg px-3 py-2.5 text-sm"
+                style={{ background: "#fef2f2", border: "1px solid #fecaca", color: "#dc2626" }}
+              >
+                <span className="mt-px shrink-0">&#9888;</span>
+                <span>{error}</span>
+              </div>
+            )}
 
             <button
               type="submit"

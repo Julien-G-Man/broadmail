@@ -1,3 +1,5 @@
+import hmac
+import structlog
 from fastapi import APIRouter, HTTPException, status, Request, Depends
 
 from app.core.dependencies import get_current_active_user
@@ -12,6 +14,7 @@ from app.auth.schemas import (
 )
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+logger = structlog.get_logger()
 
 # Access token lifetime matches the next-auth session (7 days).
 # No refresh tokens — the session expires when the JWT expires.
@@ -19,10 +22,17 @@ _TOKEN_LIFETIME_MINUTES = 60 * 24 * 7
 
 
 @router.post("/login", response_model=TokenResponse)
-@limiter.limit("5/minute")
+@limiter.limit("10/minute")
 async def login(request: Request, payload: LoginRequest):
     email_match = payload.email.lower() == settings.FIRST_ADMIN_EMAIL.lower()
-    password_match = payload.password == settings.FIRST_ADMIN_PASSWORD
+    password_match = hmac.compare_digest(payload.password, settings.FIRST_ADMIN_PASSWORD)
+
+    logger.info(
+        "login_attempt",
+        received_email=payload.email,
+        email_match=email_match,
+        password_match=password_match,
+    )
 
     if not email_match or not password_match:
         raise HTTPException(
