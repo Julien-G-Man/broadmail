@@ -1,27 +1,40 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import Link from "next/link";
+import { Plus } from "lucide-react";
 
-const PAGE_TITLES: Record<string, string> = {
-  "/": "Dashboard",
-  "/contacts": "Contacts",
-  "/contacts/lists": "Contact Lists",
-  "/templates": "Email Templates",
-  "/campaigns": "Campaigns",
-  "/settings": "Settings",
+const META: Record<string, { title: string; cta?: { label: string; href: string } }> = {
+  "/":               { title: "Dashboard" },
+  "/contacts":       { title: "Contacts",  cta: { label: "Import CSV",   href: "#import" } },
+  "/contacts/lists": { title: "Lists" },
+  "/templates":      { title: "Templates", cta: { label: "New Template", href: "/templates/new" } },
+  "/campaigns":      { title: "Campaigns", cta: { label: "New Campaign", href: "/campaigns/new" } },
 };
 
 export default function TopBar() {
   const pathname = usePathname();
-
-  const title =
-    Object.entries(PAGE_TITLES)
+  const meta =
+    Object.entries(META)
       .sort((a, b) => b[0].length - a[0].length)
-      .find(([path]) => pathname === path || pathname.startsWith(path + "/"))?.[1] || "Broadmail";
+      .find(([p]) => pathname === p || pathname.startsWith(p + "/"))?.[1]
+    ?? { title: "Broadmail" };
 
   return (
-    <header className="h-14 border-b border-border bg-white flex items-center px-6">
-      <h1 className="font-display text-base font-semibold text-text-primary">{title}</h1>
+    <header
+      className="flex items-center justify-between bg-white border-b border-border px-6 shrink-0"
+      style={{ height: 56 }}
+    >
+      <h1 className="font-display font-semibold text-text-primary" style={{ fontSize: 15 }}>
+        {meta.title}
+      </h1>
+
+      {meta.cta && meta.cta.href !== "#import" && (
+        <Link href={meta.cta.href} className="btn-primary">
+          <Plus size={13} />
+          {meta.cta.label}
+        </Link>
+      )}
     </header>
   );
 }

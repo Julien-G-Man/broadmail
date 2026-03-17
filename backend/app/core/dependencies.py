@@ -1,53 +1,28 @@
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import JWTError
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+"""
+Auth dependencies — stubbed for dev mode.
+All routes that Depend on these receive a dummy admin user without any token check.
+Re-enable by restoring the real implementations when auth is needed.
+"""
+from types import SimpleNamespace
+import uuid
 
-from app.core.database import get_db
-from app.core.security import decode_access_token
-
-security = HTTPBearer()
-
-
-async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: AsyncSession = Depends(get_db),
-):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try:
-        token = credentials.credentials
-        payload = decode_access_token(token)
-        user_id: str = payload.get("sub")
-        if user_id is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
-
-    # Import here to avoid circular imports
-    from app.auth.models import User
-
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
-    if user is None:
-        raise credentials_exception
-    return user
+# Shared dummy user returned by all auth dependencies
+_DUMMY_USER = SimpleNamespace(
+    id=uuid.UUID("00000000-0000-0000-0000-000000000001"),
+    email="dev@broadmail.local",
+    name="Dev User",
+    role="admin",
+    is_active=True,
+)
 
 
-async def get_current_active_user(current_user=Depends(get_current_user)):
-    if not current_user.is_active:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user")
-    return current_user
+async def get_current_user():
+    return _DUMMY_USER
 
 
-async def require_admin(current_user=Depends(get_current_active_user)):
-    if current_user.role != "admin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required",
-        )
-    return current_user
+async def get_current_active_user():
+    return _DUMMY_USER
+
+
+async def require_admin():
+    return _DUMMY_USER

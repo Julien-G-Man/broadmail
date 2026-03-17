@@ -1,5 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, HTTPException, status, Request, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.auth.service import authenticate_user, create_tokens, rotate_refresh_token, revoke_token
+from app.core.database import get_db
+from app.core.dependencies import get_current_active_user
+from app.core.rate_limit import limiter
 
 from app.auth.schemas import (
     LoginRequest,
@@ -8,10 +13,6 @@ from app.auth.schemas import (
     AccessTokenResponse,
     UserRead,
 )
-from app.auth.service import authenticate_user, create_tokens, rotate_refresh_token, revoke_token
-from app.core.database import get_db
-from app.core.dependencies import get_current_active_user
-from app.core.rate_limit import limiter
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 

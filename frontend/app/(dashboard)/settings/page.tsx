@@ -7,7 +7,6 @@ import { User } from "@/types";
 import { formatDate } from "@/lib/utils";
 import { Plus, Trash2, Shield, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { useSession } from "next-auth/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -22,8 +21,7 @@ const createUserSchema = z.object({
 type CreateUserForm = z.infer<typeof createUserSchema>;
 
 export default function SettingsPage() {
-  const { data: session } = useSession();
-  const isAdmin = (session as any)?.role === "admin";
+  const isAdmin = true; // auth disabled — always admin in dev mode
   const qc = useQueryClient();
 
   const [showCreate, setShowCreate] = useState(false);
@@ -169,7 +167,7 @@ export default function SettingsPage() {
                   </td>
                   <td className="px-4 py-3 text-text-muted">{formatDate(user.created_at)}</td>
                   <td className="px-4 py-3">
-                    {user.is_active && user.id !== (session?.user as any)?.id && (
+                    {user.is_active && (
                       <button
                         onClick={() => {
                           if (confirm(`Deactivate ${user.name}?`)) deactivateUser.mutate(user.id);
