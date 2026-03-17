@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.campaigns.models import Campaign, CampaignRecipient
+from app.campaigns.service import prepare_recipients
 from app.contacts.models import Contact
 from app.templates.models import EmailTemplate
 from app.sending.dispatcher import send_batch_with_fallback
@@ -203,6 +204,38 @@ async def process_campaign(ctx, campaign_id: str):
             raise
 
 
+async def dispatch_scheduled_campaigns(ctx):
+    """ARQ cron job (runs every minute): auto-enqueue campaigns whose scheduled_at has passed."""
+    now = datetime.now(timezone.utc)
+    dispatched = []
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Campaign).where(
+                Campaign.status == "scheduled",
+                Campaign.scheduled_at <= now,
+            )
+        )
+        campaigns = result.scalars().all()
+
+        for campaign in campaigns:
+            try:
+                await prepare_recipients(db, campaign)
+                campaign.status = "queued"
+                dispatched.append(str(campaign.id))
+                logger.info("scheduled_campaign_queued", campaign_id=str(campaign.id))
+            except Exception as e:
+                logger.error("dispatch_prepare_failed", campaign_id=str(campaign.id), error=str(e))
+                campaign.status = "failed"
+                campaign.error_message = str(e)
+
+        await db.commit()
+
+    for campaign_id in dispatched:
+        await ctx["redis"].enqueue_job("process_campaign", campaign_id)
+        logger.info("scheduled_campaign_dispatched", campaign_id=campaign_id)
+
+
 async def startup(ctx):
     pass
 
@@ -213,6 +246,7 @@ async def shutdown(ctx):
 
 class WorkerSettings:
     functions = [process_campaign]
+    cron_jobs = [cron(dispatch_scheduled_campaigns, second={0})]  # every minute at :00
     on_startup = startup
     on_shutdown = shutdown
     redis_settings = None  # Set dynamically

@@ -1,4 +1,5 @@
 import asyncio
+import uuid
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
@@ -6,10 +7,27 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 
 from app.main import app
 from app.core.database import Base, get_db
+from app.core.config import settings
 from app.core.security import hash_password
 from app.auth.models import User
 
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
+TEST_ADMIN_EMAIL = "admin@test.com"
+TEST_ADMIN_PASSWORD = "testpassword"
+_AUTH_HEADERS_CACHE: dict[str, str] | None = None
+
+
+@pytest.fixture(autouse=True)
+def override_env_admin_credentials():
+    old_email = settings.FIRST_ADMIN_EMAIL
+    old_password = settings.FIRST_ADMIN_PASSWORD
+    settings.FIRST_ADMIN_EMAIL = TEST_ADMIN_EMAIL
+    settings.FIRST_ADMIN_PASSWORD = TEST_ADMIN_PASSWORD
+    try:
+        yield
+    finally:
+        settings.FIRST_ADMIN_EMAIL = old_email
+        settings.FIRST_ADMIN_PASSWORD = old_password
 
 
 @pytest.fixture(scope="session")
@@ -59,9 +77,9 @@ async def client(db_session):
 @pytest_asyncio.fixture
 async def admin_user(db_session):
     user = User(
-        email="admin@test.com",
+        email=f"admin-{uuid.uuid4().hex[:8]}@test.com",
         name="Test Admin",
-        hashed_password=hash_password("testpassword"),
+        hashed_password=hash_password(TEST_ADMIN_PASSWORD),
         role="admin",
     )
     db_session.add(user)
@@ -73,9 +91,9 @@ async def admin_user(db_session):
 @pytest_asyncio.fixture
 async def sender_user(db_session):
     user = User(
-        email="sender@test.com",
+        email=f"sender-{uuid.uuid4().hex[:8]}@test.com",
         name="Test Sender",
-        hashed_password=hash_password("testpassword"),
+        hashed_password=hash_password(TEST_ADMIN_PASSWORD),
         role="sender",
     )
     db_session.add(user)
@@ -84,7 +102,14 @@ async def sender_user(db_session):
     return user
 
 
-async def get_auth_headers(client, email="admin@test.com", password="testpassword"):
+async def get_auth_headers(client, email=TEST_ADMIN_EMAIL, password=TEST_ADMIN_PASSWORD):
+    global _AUTH_HEADERS_CACHE
+
+    if _AUTH_HEADERS_CACHE is not None:
+        return _AUTH_HEADERS_CACHE
+
     response = await client.post("/api/auth/login", json={"email": email, "password": password})
+    assert response.status_code == 200, response.text
     token = response.json()["access_token"]
-    return {"Authorization": f"Bearer {token}"}
+    _AUTH_HEADERS_CACHE = {"Authorization": f"Bearer {token}"}
+    return _AUTH_HEADERS_CACHE

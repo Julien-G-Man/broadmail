@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useCreateCampaign, useSendCampaign } from "@/hooks/useCampaigns";
+import { useCreateCampaign, useSendCampaign, useScheduleCampaign } from "@/hooks/useCampaigns";
 import { useTemplates } from "@/hooks/useTemplates";
 import { useContactLists } from "@/hooks/useContacts";
+import { formatDateTime } from "@/lib/utils";
 import { toast } from "sonner";
-import { ArrowLeft, ArrowRight, Send, Save, Check, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Send, Save, Check, Loader2, Clock } from "lucide-react";
 import Link from "next/link";
 
 const STEPS = ["Details", "Audience", "Review"];
@@ -15,11 +16,14 @@ export default function NewCampaignPage() {
   const router = useRouter();
   const createCampaign = useCreateCampaign();
   const sendCampaign = useSendCampaign();
+  const scheduleCampaign = useScheduleCampaign();
   const { data: templates } = useTemplates();
   const { data: lists } = useContactLists();
 
   const [step, setStep] = useState(0);
-  const [sending, setSending] = useState(false);
+  const [submittingAction, setSubmittingAction] = useState<"send" | "schedule" | null>(null);
+  const [deliveryMode, setDeliveryMode] = useState<"now" | "schedule">("now");
+  const [scheduledAt, setScheduledAt] = useState("");
   const [form, setForm] = useState({
     name: "",
     from_name: "",
@@ -56,6 +60,17 @@ export default function NewCampaignPage() {
     list_ids: form.list_ids,
   });
 
+  const isBusy =
+    createCampaign.isPending ||
+    sendCampaign.isPending ||
+    scheduleCampaign.isPending ||
+    submittingAction !== null;
+
+  const scheduledDate = scheduledAt ? new Date(scheduledAt) : null;
+  const hasValidScheduledAt = Boolean(
+    scheduledAt && scheduledDate && !Number.isNaN(scheduledDate.getTime())
+  );
+
   const handleSaveDraft = async () => {
     try {
       const campaign = await createCampaign.mutateAsync(buildPayload() as any);
@@ -67,7 +82,7 @@ export default function NewCampaignPage() {
   };
 
   const handleSendNow = async () => {
-    setSending(true);
+    setSubmittingAction("send");
     try {
       const campaign = await createCampaign.mutateAsync(buildPayload() as any);
       const id = (campaign as any).id;
@@ -77,7 +92,30 @@ export default function NewCampaignPage() {
     } catch (err: any) {
       toast.error(err.response?.data?.detail || "Failed to send campaign");
     } finally {
-      setSending(false);
+      setSubmittingAction(null);
+    }
+  };
+
+  const handleSchedule = async () => {
+    if (!hasValidScheduledAt || !scheduledDate) {
+      toast.error("Choose a valid scheduled time");
+      return;
+    }
+
+    setSubmittingAction("schedule");
+    try {
+      const campaign = await createCampaign.mutateAsync(buildPayload() as any);
+      const id = (campaign as any).id;
+      await scheduleCampaign.mutateAsync({
+        id,
+        scheduled_at: scheduledDate.toISOString(),
+      });
+      toast.success("Campaign scheduled");
+      router.push(`/dashboard/campaigns/${id}`);
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || "Failed to schedule campaign");
+    } finally {
+      setSubmittingAction(null);
     }
   };
 
@@ -272,8 +310,70 @@ export default function NewCampaignPage() {
             <div>
               <h3 className="font-semibold text-base">Review & Send</h3>
               <p className="text-text-secondary text-sm mt-0.5">
-                Everything look right? You can send now or save as a draft.
+                Everything look right? You can send now, schedule it, or save as a draft.
               </p>
+            </div>
+
+            <div className="rounded-xl border border-border bg-surface-2 p-4 space-y-4">
+              <div>
+                <p className="text-sm font-medium text-text-primary">Delivery</p>
+                <p className="text-xs text-text-muted mt-1">
+                  Choose whether this campaign should start immediately or be dispatched later.
+                </p>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setDeliveryMode("now")}
+                  className={`rounded-lg border p-4 text-left transition-colors ${
+                    deliveryMode === "now"
+                      ? "border-brand bg-brand/5"
+                      : "border-border bg-white hover:bg-surface"
+                  }`}
+                >
+                  <span className="flex items-center gap-2 text-sm font-medium text-text-primary">
+                    <Send className="w-4 h-4" />
+                    Send Now
+                  </span>
+                  <p className="mt-2 text-xs text-text-muted">
+                    Queue the campaign immediately after it is created.
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setDeliveryMode("schedule")}
+                  className={`rounded-lg border p-4 text-left transition-colors ${
+                    deliveryMode === "schedule"
+                      ? "border-brand bg-brand/5"
+                      : "border-border bg-white hover:bg-surface"
+                  }`}
+                >
+                  <span className="flex items-center gap-2 text-sm font-medium text-text-primary">
+                    <Clock className="w-4 h-4" />
+                    Schedule
+                  </span>
+                  <p className="mt-2 text-xs text-text-muted">
+                    Keep the campaign in scheduled status until the worker picks it up.
+                  </p>
+                </button>
+              </div>
+
+              {deliveryMode === "schedule" && (
+                <div>
+                  <label className="block text-sm font-medium mb-1">Scheduled Time *</label>
+                  <input
+                    type="datetime-local"
+                    value={scheduledAt}
+                    onChange={(e) => setScheduledAt(e.target.value)}
+                    className="input"
+                  />
+                  <p className="mt-2 text-xs text-text-muted">
+                    Stored as your local selection and sent to the API in ISO-8601 format.
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="rounded-lg border border-border divide-y divide-border text-sm">
@@ -292,6 +392,13 @@ export default function NewCampaignPage() {
                   label: "Recipients",
                   value: `~${totalRecipients.toLocaleString()} (active contacts)`,
                 },
+                {
+                  label: "Delivery",
+                  value:
+                    deliveryMode === "schedule" && hasValidScheduledAt && scheduledDate
+                      ? `Scheduled for ${formatDateTime(scheduledDate.toISOString())}`
+                      : "Send immediately",
+                },
               ].map((row) => (
                 <div key={row.label} className="flex justify-between px-4 py-3">
                   <span className="text-text-secondary">{row.label}</span>
@@ -300,28 +407,42 @@ export default function NewCampaignPage() {
               ))}
             </div>
 
-            {/* Primary action: Send Now */}
-            <button
-              onClick={handleSendNow}
-              disabled={sending || createCampaign.isPending}
-              className="w-full btn-primary flex items-center justify-center gap-2 py-3 disabled:opacity-50"
-            >
-              {sending ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Send className="w-4 h-4" />
-              )}
-              {sending ? "Sending…" : `Send to ${totalRecipients.toLocaleString()} recipients`}
-            </button>
+            <div className="grid gap-3 md:grid-cols-3">
+              <button
+                onClick={handleSendNow}
+                disabled={isBusy}
+                className="w-full btn-primary flex items-center justify-center gap-2 py-3 disabled:opacity-50"
+              >
+                {submittingAction === "send" ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
+                {submittingAction === "send" ? "Sending…" : "Send Now"}
+              </button>
 
-            <button
-              onClick={handleSaveDraft}
-              disabled={sending || createCampaign.isPending}
-              className="w-full btn-ghost border border-border flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              <Save className="w-4 h-4" />
-              Save as Draft
-            </button>
+              <button
+                onClick={handleSchedule}
+                disabled={isBusy || !hasValidScheduledAt}
+                className="w-full btn-ghost border border-border flex items-center justify-center gap-2 py-3 disabled:opacity-50"
+              >
+                {submittingAction === "schedule" ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Clock className="w-4 h-4" />
+                )}
+                {submittingAction === "schedule" ? "Scheduling…" : "Schedule"}
+              </button>
+
+              <button
+                onClick={handleSaveDraft}
+                disabled={isBusy}
+                className="w-full btn-ghost border border-border flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <Save className="w-4 h-4" />
+                Save as Draft
+              </button>
+            </div>
           </>
         )}
 

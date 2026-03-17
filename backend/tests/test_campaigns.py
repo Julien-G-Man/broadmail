@@ -1,6 +1,9 @@
 import pytest
 from httpx import AsyncClient
 from tests.conftest import get_auth_headers
+from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock
 
 
 @pytest.mark.asyncio
@@ -72,7 +75,6 @@ async def test_campaign_status_transitions(client: AsyncClient, admin_user, db_s
     campaign_id = create.json()["id"]
 
     # Schedule it
-    from datetime import datetime, timezone, timedelta
     future = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
     schedule = await client.post(
         f"/api/campaigns/{campaign_id}/schedule",
@@ -86,3 +88,36 @@ async def test_campaign_status_transitions(client: AsyncClient, admin_user, db_s
     cancel = await client.post(f"/api/campaigns/{campaign_id}/cancel", headers=headers)
     assert cancel.status_code == 200
     assert cancel.json()["status"] == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_dispatch_scheduled_campaigns_enqueues_due_campaign(db_session, admin_user, monkeypatch):
+    from app.campaigns.models import Campaign
+    from app.sending import worker
+
+    campaign = Campaign(
+        name="Scheduled Campaign",
+        from_name="Enactus KNUST",
+        from_email="noreply@enactusknust.com",
+        list_ids=[],
+        status="scheduled",
+        scheduled_at=datetime.now(timezone.utc) - timedelta(minutes=5),
+        created_by=admin_user.id,
+    )
+    db_session.add(campaign)
+    await db_session.flush()
+
+    @asynccontextmanager
+    async def fake_session_local():
+        yield db_session
+
+    redis = AsyncMock()
+
+    monkeypatch.setattr(worker, "AsyncSessionLocal", fake_session_local)
+    monkeypatch.setattr(worker, "prepare_recipients", AsyncMock(return_value=0))
+
+    await worker.dispatch_scheduled_campaigns({"redis": redis})
+
+    await db_session.refresh(campaign)
+    assert campaign.status == "queued"
+    redis.enqueue_job.assert_awaited_once_with("process_campaign", str(campaign.id))

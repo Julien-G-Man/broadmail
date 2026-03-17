@@ -1,3 +1,5 @@
+import asyncio
+
 import resend
 import structlog
 
@@ -22,7 +24,7 @@ class ResendProvider(BaseEmailProvider):
                     "text": msg.text or None,
                     "reply_to": msg.reply_to or msg.from_email,
                 }
-                response = resend.Emails.send(params)
+                response = await asyncio.to_thread(resend.Emails.send, params)
                 results.append(SendResult(success=True, provider_id=response.get("id")))
             except Exception as e:
                 logger.error("resend_send_error", error=str(e), to=msg.to_email)

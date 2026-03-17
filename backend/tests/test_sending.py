@@ -1,8 +1,10 @@
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
+import resend
 
 from app.sending.provider import EmailMessage
 from app.sending.dispatcher import send_batch_with_fallback
+from app.sending.resend_provider import ResendProvider
 
 
 def make_message():
@@ -72,3 +74,20 @@ async def test_dispatcher_raises_when_no_provider():
 
         with pytest.raises(RuntimeError, match="No email provider configured"):
             await send_batch_with_fallback(messages)
+
+
+@pytest.mark.asyncio
+async def test_resend_provider_uses_to_thread_wrapper():
+    provider = ResendProvider("re_test_key")
+
+    with patch("app.sending.resend_provider.asyncio.to_thread", new_callable=AsyncMock) as mock_to_thread:
+        mock_to_thread.return_value = {"id": "msg_123"}
+
+        results = await provider.send_batch([make_message()])
+
+    mock_to_thread.assert_awaited_once()
+    called_func, called_params = mock_to_thread.await_args.args
+    assert called_func.__qualname__ == resend.Emails.send.__qualname__
+    assert called_params["to"] == ["test@example.com"]
+    assert results[0].success is True
+    assert results[0].provider_id == "msg_123"

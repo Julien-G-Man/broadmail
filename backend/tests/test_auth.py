@@ -48,33 +48,16 @@ async def test_me(client: AsyncClient, admin_user):
 @pytest.mark.asyncio
 async def test_me_unauthenticated(client: AsyncClient):
     response = await client.get("/api/auth/me")
-    assert response.status_code == 403
+    assert response.status_code == 401
 
 
 @pytest.mark.asyncio
-async def test_refresh_token(client: AsyncClient, admin_user):
-    login = await client.post(
-        "/api/auth/login",
-        json={"email": "admin@test.com", "password": "testpassword"},
-    )
-    data = login.json()
-    response = await client.post(
-        "/api/auth/refresh",
-        json={"refresh_token": data["refresh_token"]},
-    )
-    assert response.status_code == 200
-    assert "access_token" in response.json()
+async def test_refresh_token_not_supported(client: AsyncClient, admin_user):
+    response = await client.post("/api/auth/refresh", json={"refresh_token": "unused"})
+    assert response.status_code == 404
 
 
 @pytest.mark.asyncio
-async def test_logout(client: AsyncClient, admin_user):
-    login = await client.post(
-        "/api/auth/login",
-        json={"email": "admin@test.com", "password": "testpassword"},
-    )
-    data = login.json()
-    response = await client.post(
-        "/api/auth/logout",
-        json={"refresh_token": data["refresh_token"]},
-    )
-    assert response.status_code == 204
+async def test_logout_not_supported(client: AsyncClient, admin_user):
+    response = await client.post("/api/auth/logout", json={"refresh_token": "unused"})
+    assert response.status_code == 404

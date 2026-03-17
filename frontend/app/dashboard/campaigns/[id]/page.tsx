@@ -71,6 +71,11 @@ export default function CampaignDetailPage() {
             <span className="text-text-muted text-sm">
               Created {formatDate(campaign.created_at)}
             </span>
+            {campaign.scheduled_at && (
+              <span className="text-text-muted text-sm">
+                Scheduled for {formatDateTime(campaign.scheduled_at)}
+              </span>
+            )}
           </div>
         </div>
         <div className="flex gap-2">
@@ -95,6 +100,10 @@ export default function CampaignDetailPage() {
           { label: "From", value: `${campaign.from_name} <${campaign.from_email}>` },
           { label: "Reply-To", value: campaign.reply_to || campaign.from_email },
           { label: "Total Recipients", value: campaign.total_recipients.toLocaleString() },
+          {
+            label: "Scheduled At",
+            value: campaign.scheduled_at ? formatDateTime(campaign.scheduled_at) : "—",
+          },
           { label: "Completed At", value: campaign.completed_at ? formatDateTime(campaign.completed_at) : "—" },
         ].map((item) => (
           <div key={item.label} className="card p-4">
