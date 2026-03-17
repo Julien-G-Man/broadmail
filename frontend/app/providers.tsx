@@ -23,7 +23,7 @@ function KeepAlivePing() {
       method: "GET",
       cache: "no-store",
     }).catch(() => {
-      // Ignore ping failures so this never affects UI flow.
+      console.log("Backend server not reachable");
     });
   }, [pathname]);
 

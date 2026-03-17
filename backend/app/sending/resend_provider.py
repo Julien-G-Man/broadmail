@@ -23,6 +23,11 @@ class ResendProvider(BaseEmailProvider):
                     "html": msg.html,
                     "text": msg.text or None,
                     "reply_to": msg.reply_to or msg.from_email,
+                    # Include tags so webhook events can be attributed to campaigns/contacts.
+                    "tags": [
+                        {"name": "campaign_id", "value": msg.campaign_id},
+                        {"name": "contact_id", "value": msg.contact_id},
+                    ],
                 }
                 response = await asyncio.to_thread(resend.Emails.send, params)
                 results.append(SendResult(success=True, provider_id=response.get("id")))

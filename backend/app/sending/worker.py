@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 import structlog
 from arq import cron
+from arq.connections import RedisSettings
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -249,10 +250,4 @@ class WorkerSettings:
     cron_jobs = [cron(dispatch_scheduled_campaigns, second={0})]  # every minute at :00
     on_startup = startup
     on_shutdown = shutdown
-    redis_settings = None  # Set dynamically
-
-    @classmethod
-    def get_settings(cls):
-        import arq
-        cls.redis_settings = arq.connections.RedisSettings.from_dsn(settings.REDIS_URL)
-        return cls
+    redis_settings = RedisSettings.from_dsn(settings.REDIS_URL)

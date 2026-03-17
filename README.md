@@ -2,7 +2,7 @@
 
 > Production-ready mass email platform. 
 Primary use: Enactus KNUST.
-Designed to be improved to be used by multiple organizations
+Designed to be improved for use by multiple organizations
 
 ---
 
