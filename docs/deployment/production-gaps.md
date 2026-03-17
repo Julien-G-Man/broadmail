@@ -12,7 +12,7 @@ Tracked against the original gap list. Items marked ✅ are resolved.
 | 2 | Silent ARQ failure on send | ✅ Fixed — raises HTTP 503 instead of swallowing exception |
 | 3 | SMTP TLS inverted logic | ✅ Fixed — `starttls()` called only when `SMTP_USE_TLS=true` |
 | 4 | CORS OPTIONS preflight returning 400 | ✅ Fixed — middleware order corrected; CORS runs before SlowAPI |
-| 5 | Token refresh in frontend | N/A in dev mode (auth disabled); needed when auth is re-enabled |
+| 5 | Token refresh in frontend | N/A — no refresh tokens exist. Access token is 7 days; no interceptor needed. |
 | 6 | Scheduled campaign execution (ARQ worker) | Pending — Redis + ARQ worker not deployed yet |
 
 ---
@@ -60,20 +60,17 @@ Tracked against the original gap list. Items marked ✅ are resolved.
 |-----|------|--------|
 | No PostCSS config | `frontend/postcss.config.mjs` | Created — Tailwind was not processing CSS at all |
 | `tailwindcss-animate` not installed | `package.json` | Required by `tailwind.config.ts`; installed |
-| Middleware still blocking routes | `frontend/middleware.ts` | Cleared matcher — no auth redirects in dev mode |
-| `SessionProvider` wrapping app | `frontend/app/providers.tsx` | Removed — required `NEXTAUTH_SECRET` env var even when auth is unused |
+| Middleware protects `/dashboard/:path*` | `frontend/middleware.ts` | Active in dev and prod — redirects unauthenticated users to `/login` |
+| `SessionProvider` wrapping app | `frontend/app/providers.tsx` | Removed — next-auth v5 does not require a client-side `SessionProvider` |
 | Frontend pointing at wrong API port | `frontend/.env` | Was `localhost:8000`; corrected to `localhost:5000` (matches `run.py`) |
 | Import modal "0 added" toast | `components/contacts/ContactImportModal.tsx` | Toast now shows warning with hint when all counts are zero |
 | Contact search firing on every keystroke | `app/(dashboard)/contacts/page.tsx` | Added 350ms debounce |
 
 ---
 
-## Remaining before production (auth re-enabled)
+## Remaining before production
 
-- [ ] Restore real auth dependencies in `app/core/dependencies.py`
-- [ ] Restore `middleware.ts` route protection
-- [ ] Add token refresh interceptor in `frontend/lib/api.ts`
-- [ ] Set `NEXTAUTH_SECRET` if next-auth is re-introduced, or implement custom session cookie using backend JWT
 - [ ] Deploy Redis + ARQ worker for scheduled sends
 - [ ] Campaign recipients tab on campaign detail page
-- [ ] Resend webhook signature verification (currently accepts all POSTs)
+
+**Auth note**: Authentication is active in both dev and production. Login is env-var based (`FIRST_ADMIN_EMAIL` / `FIRST_ADMIN_PASSWORD`). No database user table is used for auth. Frontend uses next-auth v5 with `AUTH_SECRET` / `AUTH_URL` env vars. No token refresh is needed — access tokens last 7 days. Resend webhook signature verification is mandatory and enforced (503 if secret not set).

@@ -113,18 +113,20 @@ Unsubscribe:
 
 ```
 Login:
-  POST /api/auth/login → { access_token (15min JWT), refresh_token (7d) }
-  refresh_token stored as bcrypt hash in DB (never raw)
+  POST /api/auth/login
+  → validates email + password against FIRST_ADMIN_EMAIL + FIRST_ADMIN_PASSWORD env vars
+     (comparison via hmac.compare_digest — timing-safe)
+  → issues a 7-day JWT access token (no refresh token)
 
-Refresh:
-  POST /api/auth/refresh → rotates refresh token (old revoked, new issued)
+GET /api/auth/me:
+  → returns admin user info constructed from env vars (not from DB)
 
 Protected endpoints:
   Authorization: Bearer <access_token>
   → decoded by get_current_active_user dependency
+  → checks that token subject (sub) == FIRST_ADMIN_EMAIL
 
-Admin-only:
-  → require_admin dependency checks user.role == "admin"
+No refresh tokens. No logout endpoint. The access token is valid for 7 days.
 ```
 
 ---
@@ -142,7 +144,7 @@ backend/app/
 ├── sending/        Email providers (Resend/SMTP), ARQ worker
 ├── analytics/      Event recording, tracking endpoints, stats
 ├── webhooks/       Resend inbound events
-└── scripts/        create_admin management script
+└── scripts/        (unused — admin credentials come from env vars)
 ```
 
 ---

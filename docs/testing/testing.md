@@ -35,9 +35,10 @@ Tests use **SQLite in-memory** (via `aiosqlite`) — no real PostgreSQL needed.
 | `event_loop` | session | Shared asyncio event loop |
 | `test_engine` | session | In-memory SQLite, creates all tables |
 | `db_session` | function | Fresh session per test, rolled back after |
-| `client` | function | `httpx.AsyncClient` with DB override |
-| `admin_user` | function | Pre-created admin user in test DB |
-| `sender_user` | function | Pre-created sender user in test DB |
+| `client` | function | `httpx.AsyncClient` with DB override and `FIRST_ADMIN_EMAIL` / `FIRST_ADMIN_PASSWORD` set in env |
+| `admin_user` | function | Dict with `email` / `password` matching the test env vars — used to obtain a JWT via `POST /api/auth/login` |
+
+Note: `admin_user` does not create a database row. Auth is env-var based. Tests authenticate by hitting `POST /api/auth/login` with the env credentials and using the returned token for subsequent requests.
 
 The `get_db` dependency is overridden per test to use the test session.
 
@@ -46,15 +47,15 @@ The `get_db` dependency is overridden per test to use the test session.
 ## Test Files
 
 ### `test_auth.py`
+Auth tests hit the login endpoint with env credentials (`FIRST_ADMIN_EMAIL` / `FIRST_ADMIN_PASSWORD`). No database users are created. No refresh or logout tests exist — those endpoints do not exist.
+
 | Test | What it verifies |
 |------|-----------------|
-| `test_login_success` | Returns access + refresh tokens |
+| `test_login_success` | Returns `access_token` with valid env credentials |
 | `test_login_wrong_password` | Returns 401 |
 | `test_login_unknown_user` | Returns 401 |
-| `test_me` | Returns user data with valid token |
-| `test_me_unauthenticated` | Returns 403 without token |
-| `test_refresh_token` | Issues new access token |
-| `test_logout` | Returns 204 |
+| `test_me` | Returns admin info with valid token |
+| `test_me_unauthenticated` | Returns 401/403 without token |
 
 ### `test_contacts.py`
 | Test | What it verifies |
@@ -90,7 +91,7 @@ Minimum coverage for key paths:
 
 | Module | Priority |
 |--------|---------|
-| `auth/service.py` | High — token rotation bugs are security issues |
+| `auth/router.py` | High — env-var credential comparison and token issuance |
 | `contacts/service.py:import_from_file` | High — edge cases in CSV parsing |
 | `campaigns/service.py` | High — status machine correctness |
 | `sending/dispatcher.py` | High — fallback logic |

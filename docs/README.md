@@ -1,6 +1,7 @@
 # Broadmail Documentation
 
-Production-ready mass email platform for Enactus KNUST. Designed to be cloned and reused for any organisation.
+Production-ready mass email platform for Enactus KNUST. 
+Designed to be improved for use by multiple organisations.
 
 ---
 
@@ -22,10 +23,9 @@ Production-ready mass email platform for Enactus KNUST. Designed to be cloned an
 ```bash
 # Backend
 cd backend
-cp .env.example .env        # fill in secrets
+cp .env.example .env        # fill in secrets — including FIRST_ADMIN_EMAIL and FIRST_ADMIN_PASSWORD
 pip install -r requirements.txt
 alembic upgrade head
-python -m app.scripts.create_admin
 uvicorn app.main:app --reload
 
 # Frontend
@@ -34,6 +34,8 @@ cp .env.local.example .env.local   # fill in secrets
 npm install
 npm run dev
 ```
+
+> Admin credentials are `FIRST_ADMIN_EMAIL` / `FIRST_ADMIN_PASSWORD` in `.env`. These must remain set permanently — they are the live login credentials, not a one-time seed. No database seeding script is needed.
 
 ---
 

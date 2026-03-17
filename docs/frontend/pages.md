@@ -4,10 +4,9 @@
 
 ```
 app/
-├── (auth)/
-│   └── login/page.tsx              Redirects to / immediately (auth disabled in dev)
-└── (dashboard)/
-    ├── layout.tsx                   No-auth shell: Sidebar + TopBar
+├── login/page.tsx                   Split-panel login form (branded left, form right)
+└── dashboard/
+    ├── layout.tsx                   Auth-protected shell: Sidebar + TopBar
     ├── page.tsx                     Dashboard overview
     ├── contacts/
     │   ├── page.tsx                 Contacts table + debounced search + import
@@ -28,25 +27,25 @@ app/
 
 ---
 
-## Auth Status (dev mode)
+## Auth Status
 
-Auth is **disabled**. The middleware has an empty matcher — no redirects happen. The login page redirects straight to `/`. All API calls go without a token; the backend returns a dummy admin user for all protected routes.
+Auth is **active** in both dev and production. `middleware.ts` protects `/dashboard/:path*` — unauthenticated users are redirected to `/login`. The login page is a split-panel layout (branded left side, form right side). On successful login, next-auth v5 stores the JWT session in an HTTP-only cookie.
 
-When auth is re-enabled:
-- Restore `middleware.ts` matcher
-- Restore `app/core/dependencies.py` real implementations
-- Restore `lib/api.ts` JWT interceptor
-- Re-add `SessionProvider` to `providers.tsx` if next-auth is used
+next-auth v5 configuration uses `AUTH_SECRET` and `AUTH_URL` env vars (not `NEXTAUTH_SECRET` / `NEXTAUTH_URL`).
+
+There is no JWT refresh interceptor in the frontend because no refresh tokens exist. The access token issued at login lasts 7 days, matching the next-auth session duration.
 
 ---
 
 ## Pages
 
 ### Login (`/login`)
-- **Dev mode**: immediately redirects to `/` via `useEffect`
-- **Prod (when auth restored)**: email + password form, `zod` validation, calls backend `/api/auth/login`
+- Split-panel layout: branded left panel, form on the right
+- Email + password form with `zod` validation
+- Calls backend `POST /api/auth/login`; on success next-auth stores the session and redirects to `/dashboard`
 
-### Dashboard (`/`)
+### Dashboard (`/dashboard`)
+- Root `/` redirects to `/dashboard`
 - Fetches `GET /api/analytics/overview`
 - 4 stat cards: Total Contacts, Total Campaigns, Emails Delivered, Open Rate
 - 3-step quick-start cards (Import → Template → Campaign)
@@ -113,7 +112,7 @@ Save → `POST /api/templates` or `PATCH /api/templates/{id}`
 - Recharts funnel: Sent → Delivered → Opened → Clicked → Bounced
 
 ### Settings (`/settings`)
-- In dev mode: `isAdmin = true` always
+- Requires admin role (read from next-auth session)
 - Users table with role + status badges
 - Inline add-user form: name, email, password, role
 
@@ -124,7 +123,6 @@ Save → `POST /api/templates` or `PATCH /api/templates/{id}`
 ### `components/layout/Sidebar.tsx`
 - 240px white sidebar, `border-r`
 - Active nav item: `#f0f1ff` background + 3px brand-colored left bar
-- Footer shows "dev mode · no auth" label in dev
 
 ### `components/layout/TopBar.tsx`
 - 56px white header
@@ -201,4 +199,4 @@ Fonts: `DM Sans` (headings/`font-display`), `Inter` (body/`font-sans`), `JetBrai
 
 ## API client (`lib/api.ts`)
 
-Plain Axios instance pointing at `NEXT_PUBLIC_API_URL` (defaults to `http://localhost:5000`). No auth interceptors in dev mode.
+Axios instance pointing at `NEXT_PUBLIC_API_URL` (defaults to `http://localhost:5000`). Attaches the JWT from the next-auth session as a `Bearer` token on every request. No refresh interceptor is needed — the access token lasts 7 days.

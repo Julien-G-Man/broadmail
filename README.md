@@ -1,6 +1,8 @@
 # Broadmail
 
-> Production-ready mass email platform. Primary use: Enactus KNUST. Designed to be cloned and reused for any organisation. Built in a 2-day sprint with Claude Code.
+> Production-ready mass email platform. 
+Primary use: Enactus KNUST.
+Designed to be improved to be used by multiple organizations
 
 ---
 

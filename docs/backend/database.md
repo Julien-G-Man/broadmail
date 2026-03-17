@@ -3,19 +3,23 @@
 ## Schema
 
 ### `users`
+> **Note**: This table is NOT used for authentication. Login credentials come from `FIRST_ADMIN_EMAIL` and `FIRST_ADMIN_PASSWORD` environment variables only. The table exists to store users created via the admin user management UI, but the auth system does not query it.
+
 ```sql
 id              UUID PRIMARY KEY DEFAULT gen_random_uuid()
 email           TEXT UNIQUE NOT NULL                -- lowercased on write
 name            TEXT NOT NULL
-hashed_password TEXT NOT NULL                      -- bcrypt, cost=12
+hashed_password TEXT NOT NULL                      -- bcrypt 4.x (passlib removed), cost=12
 role            TEXT NOT NULL DEFAULT 'sender'     -- 'admin' | 'sender'
 is_active       BOOLEAN NOT NULL DEFAULT true
 created_at      TIMESTAMPTZ DEFAULT now()
 updated_at      TIMESTAMPTZ DEFAULT now()
-created_by      UUID REFERENCES users(id)          -- null for first admin
+created_by      UUID REFERENCES users(id)          -- null for admin-created resources
 ```
 
 ### `refresh_tokens`
+> **Note**: Not currently used — the application does not issue refresh tokens. The access token issued at login is valid for 7 days. This table exists for potential future use.
+
 ```sql
 id          UUID PRIMARY KEY
 user_id     UUID REFERENCES users(id) ON DELETE CASCADE

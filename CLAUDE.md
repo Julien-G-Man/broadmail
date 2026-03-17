@@ -37,7 +37,7 @@
 | DB               | PostgreSQL 15+                       |
 | Migrations       | Alembic                              |
 | Validation       | Pydantic v2                          |
-| Auth             | python-jose (JWT) + passlib (bcrypt) |
+| Auth             | python-jose (JWT) + bcrypt           |
 | Task Queue       | ARQ (Redis-backed async queue)       |
 | Email — Primary  | resend (official SDK)                |
 | Email — Fallback | aiosmtplib                           |
@@ -91,10 +91,10 @@ broadmail/
 │   │   │   ├── dependencies.py        # FastAPI Depends: get_db, get_current_user, require_admin
 │   │   │   └── exceptions.py          # Global exception handlers
 │   │   ├── auth/
-│   │   │   ├── models.py              # User, RefreshToken
-│   │   │   ├── schemas.py             # LoginRequest, TokenResponse, UserCreate, UserRead
-│   │   │   ├── router.py              # POST /auth/login, POST /auth/refresh, POST /auth/logout
-│   │   │   └── service.py             # authenticate_user, create_tokens, revoke_token
+│   │   │   ├── models.py              # User (DB model; not used for auth)
+│   │   │   ├── schemas.py             # LoginRequest, TokenResponse, UserRead
+│   │   │   ├── router.py              # POST /api/auth/login, GET /api/auth/me
+│   │   │   └── service.py             # (unused — login logic is inline in router)
 │   │   ├── users/
 │   │   │   ├── models.py              # (re-exports User from auth)
 │   │   │   ├── schemas.py             # UserCreate, UserUpdate, UserRead
@@ -147,9 +147,9 @@ broadmail/
     ├── app/
     │   ├── (auth)/
     │   │   └── login/
-    │   │       └── page.tsx           # Login page — only public page
-    │   ├── (dashboard)/
-    │   │   ├── layout.tsx             # Sidebar + topbar shell (auth-protected)
+    │   │       └── page.tsx           # Login page — split-panel, only public page
+    │   ├── dashboard/
+    │   │   ├── layout.tsx             # Sidebar + topbar shell (auth-protected, server-side check)
     │   │   ├── page.tsx               # Dashboard — stats overview
     │   │   ├── contacts/
     │   │   │   ├── page.tsx           # Contact list table + search
@@ -333,25 +333,27 @@ provider_event_id TEXT UNIQUE                 -- deduplicate webhook events
 ### Authentication Flow
 
 ```
-POST /auth/login
-  → validate email+password
-  → return { access_token (15min JWT), refresh_token (7d, stored hashed in DB) }
+POST /api/auth/login
+  → compare payload.email against FIRST_ADMIN_EMAIL (case-insensitive)
+  → compare payload.password against FIRST_ADMIN_PASSWORD (hmac.compare_digest, constant-time)
+  → if mismatch → 401
+  → return { access_token (7-day JWT, sub=FIRST_ADMIN_EMAIL, role=admin) }
 
-POST /auth/refresh
-  → validate refresh_token → issue new access_token + rotate refresh_token
-
-POST /auth/logout
-  → revoke refresh_token in DB
+GET /api/auth/me
+  → decode JWT, verify sub == FIRST_ADMIN_EMAIL
+  → return admin user object (constructed from env, no DB lookup)
 
 Every protected endpoint:
   → Authorization: Bearer <access_token>
-  → Depends(get_current_active_user)
+  → Depends(get_current_active_user)  # decodes JWT, checks sub matches env email
 
 Admin-only endpoints:
   → Depends(require_admin)
 ```
 
-First admin is seeded via a management script: `python -m app.scripts.create_admin`
+No refresh tokens. No logout endpoint. No database user lookup during auth.
+Admin credentials live permanently in FIRST_ADMIN_EMAIL / FIRST_ADMIN_PASSWORD env vars.
+To rotate credentials: update the env vars and redeploy.
 
 ### Email Provider Abstraction
 
@@ -506,10 +508,8 @@ def extract_variables(html: str, subject: str) -> list[str]:
 ### Auth
 
 ```
-POST   /api/auth/login
-POST   /api/auth/refresh
-POST   /api/auth/logout
-GET    /api/auth/me
+POST   /api/auth/login    { email, password } → { access_token }   (rate-limited: 10/min)
+GET    /api/auth/me       → { id, email, name, role, is_active }
 ```
 
 ### Users (Admin only)
@@ -620,16 +620,16 @@ SMTP_USE_TLS=true
 TRACKING_BASE_URL=https://your-backend-domain/
 UNSUBSCRIBE_SECRET=<separate long random string>
 
-# Admin seed
+# Admin credentials — keep these permanently, they ARE the login credentials
 FIRST_ADMIN_EMAIL=admin@enactusknust.com
-FIRST_ADMIN_PASSWORD=<temporary strong password, change after first login>
+FIRST_ADMIN_PASSWORD=<strong password — to rotate, update this value and redeploy>
 ```
 
 ### Frontend `.env.local`
 
 ```env
-NEXTAUTH_URL=https://your-frontend-domain.vercel.app
-NEXTAUTH_SECRET=<long random string>
+AUTH_URL=https://your-frontend-domain.vercel.app
+AUTH_SECRET=<long random string>
 NEXT_PUBLIC_API_URL=https://your-backend-domain
 ```
 
@@ -639,9 +639,9 @@ NEXT_PUBLIC_API_URL=https://your-backend-domain
 
 ### Backend
 
-- **JWT**: Access token = 15 minutes. Refresh token = 7 days, rotated on every use, stored hashed in DB.
-- **Password hashing**: bcrypt with cost factor 12.
-- **Rate limiting**: `slowapi` — 5 req/min on `/auth/login`, 100 req/min on all other endpoints per IP.
+- **JWT**: Access token = 7 days (matches next-auth session lifetime). No refresh tokens — credentials are re-validated on session expiry.
+- **Password hashing**: bcrypt 4.x used directly (passlib removed), cost factor 12, 72-byte input limit enforced in Pydantic schemas.
+- **Rate limiting**: `slowapi` — 10 req/min on `/api/auth/login`, 100 req/min on all other endpoints per IP.
 - **CORS**: Whitelist only the frontend domain. Never use `*` in production.
 - **Input sanitisation**: All HTML template content is sanitised with `bleach` before storage to prevent XSS injection into emails.
 - **Webhook verification**: Resend webhooks must be verified using `svix` signature verification — reject any webhook without valid signature.
@@ -718,10 +718,9 @@ NEXT_PUBLIC_API_URL=https://your-backend-domain
 
 **Midday (4–8h)**
 
-- [ ] `core/security.py` — bcrypt + JWT
-- [ ] `auth/` module complete — login, refresh, logout, me
-- [ ] `users/` module complete — admin CRUD, create_admin script
-- [ ] Seed first admin via script
+- [ ] `core/security.py` — bcrypt (direct, no passlib) + JWT
+- [ ] `auth/` module complete — login (env-var check) + me
+- [ ] `users/` module complete — admin CRUD (admin credentials live in env, no DB seeding needed)
 
 **Afternoon (8–12h)**
 
@@ -779,7 +778,7 @@ NEXT_PUBLIC_API_URL=https://your-backend-domain
 1. **Template preview must never send a real email** — render to HTML only.
 1. **CSV import must handle BOM, different encodings, and empty rows** — use `pd.read_csv(..., encoding='utf-8-sig')` and `df.dropna(subset=['email'])`.
 1. **Unsubscribe tokens must not expire** — use `exp: None` or 10-year expiry. A broken unsubscribe link is a legal liability.
-1. **Don't store the raw refresh token** — store `bcrypt_hash(token)` in the DB, compare on verify.
+1. **No refresh tokens** — the system issues a single 7-day access token. There is no `/auth/refresh` or `/auth/logout` endpoint. Session expiry means the user must log in again.
 1. **Resend limits**: max 100 emails/request in Resend API. Our batch of 50 is safely within this. Do not increase.
 1. **Always set `reply_to`** — set on the campaign level. Never leave it as the sending address by default.
 1. **Excel files may have multiple sheets** — always read `sheet_name=0` (first sheet) and inform the user.
@@ -813,7 +812,7 @@ NEXT_PUBLIC_API_URL=https://your-backend-domain
 - [ ] Database migrations run before app start (`alembic upgrade head` in Railway start command)
 - [ ] ARQ worker running as a separate process/service
 - [ ] Resend webhook URL registered in Resend dashboard → `https://backend-domain/webhooks/resend`
-- [ ] `FIRST_ADMIN_EMAIL` / `FIRST_ADMIN_PASSWORD` env vars set, `create_admin` script run once, then vars removed
+- [ ] `FIRST_ADMIN_EMAIL` / `FIRST_ADMIN_PASSWORD` set to production credentials and **kept permanently** — these are the live login credentials, not a one-time seed
 - [ ] HTTPS enforced on both frontend and backend (Railway/Vercel do this automatically)
 - [ ] Health check endpoint: `GET /health` returns `{"status": "ok"}` (for Railway uptime monitor)
 

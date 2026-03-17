@@ -57,10 +57,10 @@ TRACKING_BASE_URL=https://your-backend.onrender.com/
 UNSUBSCRIBE_SECRET=<separate long random string>
 
 FIRST_ADMIN_EMAIL=admin@yourorg.com
-FIRST_ADMIN_PASSWORD=<strong temp password — change after first login>
+FIRST_ADMIN_PASSWORD=<strong password>
 ```
 
-> After first deploy, create the admin account, then remove `FIRST_ADMIN_EMAIL` / `FIRST_ADMIN_PASSWORD` from env vars.
+> `FIRST_ADMIN_EMAIL` and `FIRST_ADMIN_PASSWORD` are the **live login credentials**. They must remain in env permanently — removing them will lock you out of the application. There is no database admin account; these env vars are the only way to authenticate.
 
 ### Neon DB URL handling
 
@@ -80,9 +80,11 @@ Neon's connection strings contain query parameters (`?sslmode=require&channel_bi
 
 ```env
 NEXT_PUBLIC_API_URL=https://your-backend.onrender.com
+AUTH_SECRET=<long random string — openssl rand -hex 32>
+AUTH_URL=https://your-frontend.vercel.app
 ```
 
-> `NEXTAUTH_URL` and `NEXTAUTH_SECRET` are not needed — auth is handled by backend JWT. The frontend has no next-auth dependency at runtime.
+`AUTH_SECRET` and `AUTH_URL` are required by next-auth v5. Note: these are named `AUTH_SECRET` / `AUTH_URL`, not `NEXTAUTH_SECRET` / `NEXTAUTH_URL`.
 
 ### Build Settings (Vercel dashboard)
 
@@ -118,8 +120,7 @@ ALLOWED_ORIGINS=https://broadmail.vercel.app
 - [ ] `ALLOWED_ORIGINS` matches exact frontend domain (no trailing slash)
 - [ ] Neon DB migrations ran cleanly — check `alembic upgrade head` in build logs
 - [ ] Resend webhook URL registered and signing secret matches env var
-- [ ] First admin account created and temp password changed
-- [ ] `FIRST_ADMIN_EMAIL` / `FIRST_ADMIN_PASSWORD` removed from env after first run
+- [ ] `FIRST_ADMIN_EMAIL` and `FIRST_ADMIN_PASSWORD` set to production credentials (never remove these)
 - [ ] `APP_ENV=production` set (disables `/docs`, `/redoc`, SQLAlchemy echo, uvicorn reload)
 - [ ] HTTPS on both frontend and backend (automatic on Vercel/Render)
 - [ ] Health check: `GET https://your-backend.onrender.com/health` → `{"status":"ok"}`
@@ -176,6 +177,6 @@ NEXT_PUBLIC_API_URL=http://localhost:5000
 
 A `postcss.config.mjs` is required at `frontend/` root for Tailwind to compile. Without it, `@tailwind` and `@apply` directives are served raw and no styles apply. The file is committed — do not delete it.
 
-### Auth in dev mode
+### Auth in dev
 
-Auth is disabled. All backend routes return a dummy admin (`app/core/dependencies.py`). The frontend has no auth redirects (`middleware.ts` empty matcher). To re-enable: restore the real dependency implementations and middleware config.
+Set `FIRST_ADMIN_EMAIL` and `FIRST_ADMIN_PASSWORD` in your local `.env`. The login flow is the same in dev and production — credentials are always read from env vars. The frontend middleware protects `/dashboard/:path*` and redirects unauthenticated users to `/login`.

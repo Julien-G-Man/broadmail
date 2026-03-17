@@ -3,45 +3,34 @@
 Base URL: `https://your-backend-domain`
 
 All protected routes require: `Authorization: Bearer <access_token>`
-In dev mode (auth disabled), all routes work without a token.
 
 ---
 
 ## Auth
 
 ### `POST /api/auth/login`
+Rate limited: **10 requests/minute per IP**.
+
 ```json
 // Request
 { "email": "user@example.com", "password": "password123" }
 
 // Response 200
-{ "access_token": "eyJ...", "refresh_token": "abc123...", "token_type": "bearer" }
+{ "access_token": "eyJ...", "token_type": "bearer" }
 
 // Response 401
 { "detail": "Invalid credentials" }
 ```
 
-### `POST /api/auth/refresh`
-```json
-// Request
-{ "refresh_token": "abc123..." }
-
-// Response 200
-{ "access_token": "eyJ...", "token_type": "bearer" }
-```
-
-### `POST /api/auth/logout`
-```json
-// Request
-{ "refresh_token": "abc123..." }
-// Response 204
-```
+Credentials are validated against `FIRST_ADMIN_EMAIL` and `FIRST_ADMIN_PASSWORD` environment variables only. No database lookup occurs. The issued access token is valid for **7 days**. There are no refresh tokens and no logout endpoint.
 
 ### `GET /api/auth/me`
 ```json
 // Response 200
-{ "id": "uuid", "email": "user@example.com", "name": "Alice", "role": "admin", "is_active": true, "created_at": "..." }
+{ "id": null, "email": "admin@example.com", "name": "Admin", "role": "admin", "is_active": true }
 ```
+
+Returns admin identity constructed from env vars.
 
 ---
 
@@ -56,6 +45,7 @@ Returns array of `UserRead`.
 { "email": "new@example.com", "name": "Bob", "password": "secure123", "role": "sender" }
 // Response 201 — UserRead
 ```
+`password` must not exceed 72 bytes (bcrypt truncation limit). Enforced via Pydantic validator.
 
 ### `PATCH /api/users/{id}`
 ```json
@@ -73,6 +63,7 @@ Deactivates user (sets `is_active=false`). Response 204.
 { "new_password": "newpassword123" }
 // Response 204
 ```
+`new_password` must not exceed 72 bytes (bcrypt truncation limit). Enforced via Pydantic validator.
 
 ---
 
@@ -254,7 +245,7 @@ Decodes JWT → suppresses contact → returns HTML "You have been unsubscribed"
 ## Webhooks
 
 ### `POST /webhooks/resend`
-Inbound from Resend's webhook system. Verified via `svix` signature.
+Inbound from Resend's webhook system. Verified via `svix` signature. **Returns 503** if `RESEND_WEBHOOK_SECRET` is not configured — the endpoint rejects all requests rather than accepting unverified payloads.
 
 Configure in Resend dashboard: `https://your-backend/webhooks/resend`
 

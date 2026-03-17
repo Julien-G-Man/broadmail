@@ -21,20 +21,18 @@ Key settings:
 - `get_db()` FastAPI dependency — yields a session, commits on success, rolls back on exception
 
 ### `security.py`
-- `hash_password` / `verify_password` — bcrypt, cost factor 12
-- `create_access_token` / `decode_access_token` — 15-min HS256 JWT
-- `create_refresh_token` — `secrets.token_urlsafe(64)` (raw random bytes)
-- `hash_refresh_token` / `verify_refresh_token` — bcrypt-hashed storage
+- `hash_password` / `verify_password` — bcrypt 4.x used directly (passlib removed), cost factor 12; enforces 72-byte input limit
+- `create_access_token` / `decode_access_token` — 7-day HS256 JWT
 - `create_tracking_token` / `decode_tracking_token` — short-lived JWT for open/click
 - `create_unsubscribe_token` / `decode_unsubscribe_token` — 10-year JWT, separate secret
 
 ### `dependencies.py`
-FastAPI `Depends` functions — **currently stubbed for dev mode** (auth disabled):
-- `get_current_user` — returns dummy admin `SimpleNamespace(id=None, role="admin", ...)`
-- `get_current_active_user` — same
-- `require_admin` — same
+FastAPI `Depends` functions:
+- `get_current_user` — decodes the Bearer JWT from the `Authorization` header; verifies that `sub` == `FIRST_ADMIN_EMAIL`; returns an admin `SimpleNamespace(id=None, role="admin", email=FIRST_ADMIN_EMAIL, ...)`
+- `get_current_active_user` — delegates to `get_current_user`
+- `require_admin` — delegates to `get_current_active_user` (all authenticated users are admin)
 
-`id=None` so that `created_by` writes `NULL` (FK is nullable). Re-enable by restoring real implementations.
+`id=None` so that `created_by` writes `NULL` (FK is nullable). Authentication is based entirely on env vars — no database User rows are queried for auth.
 
 ### `exceptions.py`
 Global FastAPI exception handlers registered in `main.py`:
@@ -47,20 +45,18 @@ Global FastAPI exception handlers registered in `main.py`:
 ## `auth/`
 
 ### Models
-- `User` — `id, email, name, hashed_password, role, is_active, created_at, updated_at, created_by`
-- `RefreshToken` — `id, user_id, token_hash, expires_at, revoked, created_at`
+- `User` — `id, email, name, hashed_password, role, is_active, created_at, updated_at, created_by` (exists in DB but NOT used for authentication)
+- `RefreshToken` — `id, user_id, token_hash, expires_at, revoked, created_at` (table exists but is not used — no refresh tokens are issued)
 
-### Service
-- `authenticate_user` — email lookup + bcrypt verify + active check
-- `create_tokens` — issues access JWT + stores hashed refresh token in DB
-- `rotate_refresh_token` — iterates non-expired tokens, verifies, revokes old, issues new
-- `revoke_token` — marks token revoked (logout)
+### Router
+- `POST /api/auth/login` — compares submitted email + password against `FIRST_ADMIN_EMAIL` + `FIRST_ADMIN_PASSWORD` env vars using `hmac.compare_digest` (timing-safe). On success, issues a 7-day JWT access token. Returns only `access_token` and `token_type`.
+- `GET /api/auth/me` — returns admin identity constructed from env vars (requires valid JWT).
+
+No refresh, no logout, no database lookup during authentication.
 
 ### Routes
 ```
-POST /api/auth/login      → LoginRequest → TokenResponse
-POST /api/auth/refresh    → RefreshRequest → AccessTokenResponse
-POST /api/auth/logout     → RefreshRequest → 204
+POST /api/auth/login      → LoginRequest → { access_token, token_type }
 GET  /api/auth/me         → UserRead (requires auth)
 ```
 
@@ -223,7 +219,7 @@ ARQ job `process_campaign(ctx, campaign_id)`:
 ## `webhooks/`
 
 `POST /webhooks/resend` — inbound from Resend:
-1. Verifies signature using `svix.webhooks.Webhook(RESEND_WEBHOOK_SECRET)`
+1. **Mandatory** signature verification using `svix.webhooks.Webhook(RESEND_WEBHOOK_SECRET)`. Returns **503** immediately if `RESEND_WEBHOOK_SECRET` is not set in env — never accepts unverified payloads.
 2. Routes by event type:
    - `email.bounced` / `email.delivery_delayed` → `handle_bounce` → suppresses contact
    - `email.complained` → `handle_complaint` → suppresses contact
@@ -233,7 +229,4 @@ ARQ job `process_campaign(ctx, campaign_id)`:
 
 ## `scripts/`
 
-`python -m app.scripts.create_admin`
-- Reads `FIRST_ADMIN_EMAIL` + `FIRST_ADMIN_PASSWORD` from env
-- Creates admin user if not already exists
-- Run once after first deploy; then remove env vars
+No scripts are required. Admin credentials come directly from `FIRST_ADMIN_EMAIL` and `FIRST_ADMIN_PASSWORD` environment variables — there is no database seeding step and no `create_admin` script to run.
