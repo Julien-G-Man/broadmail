@@ -2,14 +2,31 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SessionProvider, useSession } from "next-auth/react";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { setAccessToken } from "@/lib/api";
+import { API_URL } from "@/lib/config";
 
 function SessionSync() {
   const { data: session } = useSession();
   useEffect(() => {
     setAccessToken((session as any)?.accessToken ?? null);
   }, [(session as any)?.accessToken]);
+  return null;
+}
+
+function KeepAlivePing() {
+  const pathname = usePathname();
+
+  useEffect(() => {
+    void fetch(`${API_URL}/health`, {
+      method: "GET",
+      cache: "no-store",
+    }).catch(() => {
+      // Ignore ping failures so this never affects UI flow.
+    });
+  }, [pathname]);
+
   return null;
 }
 
@@ -30,6 +47,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
     <SessionProvider>
       <QueryClientProvider client={queryClient}>
         <SessionSync />
+        <KeepAlivePing />
         {children}
       </QueryClientProvider>
     </SessionProvider>
