@@ -49,6 +49,17 @@ class Settings(BaseSettings):
         value = (value or "").strip()
         return value if not value or value.endswith("/") else f"{value}/"
 
+    @field_validator("REDIS_URL", mode="before")
+    @classmethod
+    def normalize_redis_url(cls, value: str) -> str:
+        v = (value or "").strip().strip('"').strip("'")
+        if not v:
+            return "redis://localhost:6379"
+        if "://" not in v:
+            # Accept host:port style env values and normalize for ARQ.
+            return f"redis://{v}"
+        return v
+
     @model_validator(mode="after")
     def validate_settings(self):
         if self.APP_ENV.lower() == "production":
