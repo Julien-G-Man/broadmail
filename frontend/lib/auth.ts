@@ -25,7 +25,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
           const tokens = await response.json();
 
-          // Fetch user info
           const meResponse = await fetch(`${API_URL}/api/auth/me`, {
             headers: { Authorization: `Bearer ${tokens.access_token}` },
           });
@@ -70,6 +69,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   session: {
     strategy: "jwt",
-    maxAge: 7 * 24 * 60 * 60, // 7 days
+    maxAge: 7 * 24 * 60 * 60,
   },
 });

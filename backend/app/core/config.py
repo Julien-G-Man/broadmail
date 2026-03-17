@@ -4,14 +4,28 @@ from pydantic import field_validator, model_validator
 
 load_dotenv()
 
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    """
+    All values are read from .env via pydantic-settings.
+    Fields with no default MUST be present in .env — the app will refuse to start otherwise.
+    Fields with a default are optional; the default is only used if the var is absent.
+    """
 
-    APP_ENV: str = "development"
-    SECRET_KEY: str = "dev-secret-key"
-    ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:3003"
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
-    DATABASE_URL: str = "sqlite+aiosqlite:///./broadmail.db"
+    APP_ENV: str
+    SECRET_KEY: str
+    ALLOWED_ORIGINS: str
+    DATABASE_URL: str
+    FIRST_ADMIN_EMAIL: str
+    FIRST_ADMIN_PASSWORD: str
+    UNSUBSCRIBE_SECRET: str
+    
     REDIS_URL: str = "redis://localhost:6379"
 
     RESEND_API_KEY: str = ""
@@ -24,39 +38,29 @@ class Settings(BaseSettings):
     SMTP_USE_TLS: bool = True
 
     TRACKING_BASE_URL: str = "http://localhost:5000/"
-    UNSUBSCRIBE_SECRET: str = "dev-unsubscribe-secret"
-
-    FIRST_ADMIN_EMAIL: str = ""
-    FIRST_ADMIN_PASSWORD: str = ""
 
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+ 
     @field_validator("TRACKING_BASE_URL", mode="before")
     @classmethod
-    def ensure_tracking_base_url_has_trailing_slash(cls, value: str) -> str:
+    def ensure_trailing_slash(cls, value: str) -> str:
         value = (value or "").strip()
-        if not value:
-            return value
-        return value if value.endswith("/") else f"{value}/"
+        return value if not value or value.endswith("/") else f"{value}/"
 
     @model_validator(mode="after")
-    def validate_production_settings(self):
-        if self.APP_ENV.lower() != "production":
-            return self
-
-        if not self.SECRET_KEY:
-            raise ValueError("SECRET_KEY must be set to a strong value in production")
-
-        if not self.UNSUBSCRIBE_SECRET:
-            raise ValueError("UNSUBSCRIBE_SECRET must be set to a strong value in production")
-
-        origins = [o for o in self.allowed_origins_list if o]
-        if not origins:
-            raise ValueError("ALLOWED_ORIGINS must include at least one origin in production")
-        if "*" in origins:
-            raise ValueError("ALLOWED_ORIGINS cannot contain '*' in production")
-
+    def validate_settings(self):
+        if self.APP_ENV.lower() == "production":
+            if self.SECRET_KEY in ("", "dev-secret-key"):
+                raise ValueError("SECRET_KEY must be a strong value in production")
+            if self.UNSUBSCRIBE_SECRET in ("", "dev-unsubscribe-secret"):
+                raise ValueError("UNSUBSCRIBE_SECRET must be a strong value in production")
+            origins = self.allowed_origins_list
+            if not origins:
+                raise ValueError("ALLOWED_ORIGINS must include at least one origin in production")
+            if "*" in origins:
+                raise ValueError("ALLOWED_ORIGINS cannot contain '*' in production")
         return self
 
     @property

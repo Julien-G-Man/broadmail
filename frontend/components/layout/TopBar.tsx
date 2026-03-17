@@ -5,11 +5,11 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 
 const META: Record<string, { title: string; cta?: { label: string; href: string } }> = {
-  "/":               { title: "Dashboard" },
-  "/contacts":       { title: "Contacts",  cta: { label: "Import CSV",   href: "#import" } },
-  "/contacts/lists": { title: "Lists" },
-  "/templates":      { title: "Templates", cta: { label: "New Template", href: "/templates/new" } },
-  "/campaigns":      { title: "Campaigns", cta: { label: "New Campaign", href: "/campaigns/new" } },
+  "/dashboard":               { title: "Dashboard" },
+  "/dashboard/contacts":       { title: "Contacts",  cta: { label: "Import CSV",   href: "#import" } },
+  "/dashboard/contacts/lists": { title: "Lists" },
+  "/dashboard/templates":      { title: "Templates", cta: { label: "New Template", href: "/dashboard/templates/new" } },
+  "/dashboard/campaigns":      { title: "Campaigns", cta: { label: "New Campaign", href: "/dashboard/campaigns/new" } },
 };
 
 export default function TopBar() {

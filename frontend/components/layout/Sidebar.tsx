@@ -2,18 +2,30 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Users, List, FileText, Send, Mail } from "lucide-react";
+import { useSession, signOut } from "next-auth/react";
+import {
+  LayoutDashboard,
+  Users,
+  List,
+  FileText,
+  Send,
+  Mail,
+  LogOut,
+  Settings,
+} from "lucide-react";
 
 const nav = [
-  { href: "/",               label: "Dashboard", icon: LayoutDashboard },
-  { href: "/contacts",       label: "Contacts",  icon: Users },
-  { href: "/contacts/lists", label: "Lists",     icon: List },
-  { href: "/templates",      label: "Templates", icon: FileText },
-  { href: "/campaigns",      label: "Campaigns", icon: Send },
+  { href: "/dashboard",               label: "Dashboard", icon: LayoutDashboard },
+  { href: "/dashboard/contacts",       label: "Contacts",  icon: Users },
+  { href: "/dashboard/contacts/lists", label: "Lists",     icon: List },
+  { href: "/dashboard/templates",      label: "Templates", icon: FileText },
+  { href: "/dashboard/campaigns",      label: "Campaigns", icon: Send },
+  { href: "/dashboard/settings",       label: "Settings",  icon: Settings },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const { data: session } = useSession();
 
   return (
     <aside
@@ -41,7 +53,7 @@ export default function Sidebar() {
         {nav.map(({ href, label, icon: Icon }) => {
           const active =
             pathname === href ||
-            (href !== "/" && pathname.startsWith(href));
+            (href !== "/dashboard" && pathname.startsWith(href));
 
           return (
             <Link
@@ -50,13 +62,8 @@ export default function Sidebar() {
               className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all duration-100 relative"
               style={
                 active
-                  ? {
-                      background: "#f0f1ff",
-                      color: "#1a1a2e",
-                    }
-                  : {
-                      color: "#5c5c70",
-                    }
+                  ? { background: "#f0f1ff", color: "#1a1a2e" }
+                  : { color: "#5c5c70" }
               }
               onMouseEnter={(e) => {
                 if (!active) {
@@ -71,11 +78,8 @@ export default function Sidebar() {
                 }
               }}
             >
-              {/* Active indicator */}
               {active && (
-                <span
-                  className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-brand"
-                />
+                <span className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full bg-brand" />
               )}
               <Icon
                 size={15}
@@ -87,9 +91,34 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* Footer */}
-      <div className="px-5 py-4 border-t border-border">
-        <span className="text-[11px] text-text-muted font-mono">dev mode · no auth</span>
+      {/* Footer — user + logout */}
+      <div className="px-3 py-3 border-t border-border">
+        <div className="flex items-center gap-2.5 px-2 py-2 rounded-lg">
+          {/* Avatar initials */}
+          <div
+            className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold shrink-0"
+            style={{ background: "#1a1a2e" }}
+          >
+            {session?.user?.name
+              ? session.user.name.slice(0, 2).toUpperCase()
+              : "AD"}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[12px] font-semibold text-text-primary truncate">
+              {session?.user?.name ?? "Admin"}
+            </p>
+            <p className="text-[10px] text-text-muted truncate">
+              {session?.user?.email ?? ""}
+            </p>
+          </div>
+          <button
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            title="Sign out"
+            className="text-text-muted hover:text-text-primary transition-colors shrink-0"
+          >
+            <LogOut size={14} />
+          </button>
+        </div>
       </div>
     </aside>
   );

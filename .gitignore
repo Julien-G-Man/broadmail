@@ -12,3 +12,7 @@ backend/broadmail.db
 .pytest_cache/
 .pytest_cache
 .next/
+.next
+frontend/.next/
+frontend/.next
+random_string.py

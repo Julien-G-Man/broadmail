@@ -40,8 +40,6 @@ app = FastAPI(
 
 app.state.limiter = limiter
 
-# Middleware order: last added = first to run.
-# SlowAPI must be added first so CORS (added last) runs outermost and
 # handles OPTIONS preflights before the rate limiter ever sees them.
 app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(
@@ -70,8 +68,8 @@ app.include_router(webhooks_router)
 
 @app.get("/")
 async def root():
-    return {"status": "BroadMail API is live. Got to /docs to see API docs."}
+    return {"status": "BroadMail API is Live. Go to /docs to see API docs."}
 
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    return {"status": "API is ok"}

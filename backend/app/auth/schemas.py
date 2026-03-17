@@ -10,7 +10,7 @@ class LoginRequest(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
-    refresh_token: str
+    refresh_token: str = ""
     token_type: str = "bearer"
 
 
@@ -24,7 +24,7 @@ class AccessTokenResponse(BaseModel):
 
 
 class UserRead(BaseModel):
-    id: uuid.UUID
+    id: uuid.UUID | None = None
     email: EmailStr
     name: str
     role: str
