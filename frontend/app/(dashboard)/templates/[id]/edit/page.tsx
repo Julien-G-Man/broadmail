@@ -54,6 +54,7 @@ export default function EditTemplatePage() {
         subject: template.subject,
         html_body: template.html_body,
         text_body: template.text_body || undefined,
+        mode: template.mode,
       }}
       onSave={handleSave}
     />

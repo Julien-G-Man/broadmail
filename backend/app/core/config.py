@@ -14,26 +14,21 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite+aiosqlite:///./broadmail.db"
     REDIS_URL: str = "redis://localhost:6379"
 
-    # Email — Resend
     RESEND_API_KEY: str = ""
     RESEND_WEBHOOK_SECRET: str = ""
 
-    # Email — SMTP fallback
     SMTP_HOST: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_USE_TLS: bool = True
 
-    # Tracking
     TRACKING_BASE_URL: str = "http://localhost:5000/"
     UNSUBSCRIBE_SECRET: str = "dev-unsubscribe-secret"
 
-    # Admin seed
     FIRST_ADMIN_EMAIL: str = ""
     FIRST_ADMIN_PASSWORD: str = ""
 
-    # JWT settings
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 

@@ -1,7 +1,7 @@
 from datetime import datetime
 import uuid
 from pydantic import BaseModel
-from typing import Any
+from typing import Any, Literal
 
 
 class TemplateCreate(BaseModel):
@@ -9,6 +9,7 @@ class TemplateCreate(BaseModel):
     subject: str
     html_body: str
     text_body: str | None = None
+    mode: Literal["text", "custom"] = "text"
 
 
 class TemplateUpdate(BaseModel):
@@ -16,6 +17,7 @@ class TemplateUpdate(BaseModel):
     subject: str | None = None
     html_body: str | None = None
     text_body: str | None = None
+    mode: Literal["text", "custom"] | None = None
 
 
 class TemplateRead(BaseModel):
@@ -25,6 +27,7 @@ class TemplateRead(BaseModel):
     html_body: str
     text_body: str | None
     variables: list[str]
+    mode: str
     created_at: datetime
     updated_at: datetime
 

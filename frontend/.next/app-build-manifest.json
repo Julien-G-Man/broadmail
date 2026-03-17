@@ -30,6 +30,21 @@
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/(dashboard)/contacts/lists/page.js"
+    ],
+    "/(dashboard)/templates/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/(dashboard)/templates/page.js"
+    ],
+    "/(dashboard)/templates/new/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/(dashboard)/templates/new/page.js"
+    ],
+    "/(dashboard)/contacts/lists/[id]/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/(dashboard)/contacts/lists/[id]/page.js"
     ]
   }
 }

@@ -35,6 +35,7 @@ export interface EmailTemplate {
   html_body: string;
   text_body: string | null;
   variables: string[];
+  mode: string;
   created_at: string;
   updated_at: string;
 }

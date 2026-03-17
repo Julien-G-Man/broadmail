@@ -1,4 +1,4 @@
-# CLAUDE.md — Broadmail
+# CLAUDE.md — BroadMail
 
 > Production-ready mass email platform. Primary use: Enactus KNUST. Designed to be cloned and reused for any organisation. Built in a 2-day sprint with Claude Code.
 
@@ -68,9 +68,9 @@
 
 | Concern          | Choice                       |
 |------------------|------------------------------|
-| Backend hosting  | Railway or Render            |
+| Backend hosting  | Render                       |
 | Frontend hosting | Vercel                       |
-| DB               | Railway Postgres or Supabase |
+| DB               | Neon DB Postgres             |
 | Redis            | Railway Redis or Upstash     |
 | Email primary    | Resend                       |
 | Email fallback   | Any SMTP (Gmail, Zoho, etc.) |

@@ -1,6 +1,8 @@
 {
-  "/(dashboard)/page": "app/(dashboard)/page.js",
   "/(dashboard)/campaigns/page": "app/(dashboard)/campaigns/page.js",
+  "/(dashboard)/contacts/page": "app/(dashboard)/contacts/page.js",
   "/(dashboard)/contacts/lists/page": "app/(dashboard)/contacts/lists/page.js",
-  "/(dashboard)/contacts/page": "app/(dashboard)/contacts/page.js"
+  "/(dashboard)/templates/page": "app/(dashboard)/templates/page.js",
+  "/(dashboard)/templates/new/page": "app/(dashboard)/templates/new/page.js",
+  "/(dashboard)/contacts/lists/[id]/page": "app/(dashboard)/contacts/lists/[id]/page.js"
 }

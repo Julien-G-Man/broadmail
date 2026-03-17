@@ -10,17 +10,18 @@ import { Upload, X, FileText, Loader2, Plus } from "lucide-react";
 interface Props {
   onClose: () => void;
   onSuccess: (listId?: string) => void;
+  defaultListId?: string;
 }
 
-export default function ContactImportModal({ onClose, onSuccess }: Props) {
+export default function ContactImportModal({ onClose, onSuccess, defaultListId }: Props) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // List assignment
+  // List assignment — if a defaultListId is provided, pre-select that list
   const { data: existingLists } = useContactLists();
   const createList = useCreateList();
-  const [listMode, setListMode] = useState<"none" | "existing" | "new">("new");
-  const [selectedListId, setSelectedListId] = useState("");
+  const [listMode, setListMode] = useState<"none" | "existing" | "new">(defaultListId ? "existing" : "new");
+  const [selectedListId, setSelectedListId] = useState(defaultListId ?? "");
   const [newListName, setNewListName] = useState("");
 
   const onDrop = useCallback((accepted: File[]) => {

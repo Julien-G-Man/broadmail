@@ -10,16 +10,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.templates.models import EmailTemplate
 from app.templates.schemas import TemplateCreate, TemplateUpdate
 
+# Used only for sanitizing text-mode templates (basic rich text from user)
 ALLOWED_TAGS = list(bleach.sanitizer.ALLOWED_TAGS) + [
     "p", "br", "h1", "h2", "h3", "h4", "h5", "h6",
     "div", "span", "table", "thead", "tbody", "tr", "td", "th",
     "img", "a", "ul", "ol", "li", "strong", "em", "u", "s",
     "blockquote", "pre", "code", "hr", "figure", "figcaption",
-    "style",
 ]
 ALLOWED_ATTRIBUTES = {
     **bleach.sanitizer.ALLOWED_ATTRIBUTES,
-    "*": ["style", "class", "id"],
+    "*": ["class", "id"],
     "a": ["href", "title", "target", "rel"],
     "img": ["src", "alt", "width", "height"],
     "td": ["colspan", "rowspan", "align", "valign"],
@@ -34,13 +34,21 @@ class RenderedEmail:
     text: str
 
 
-def extract_variables(html: str, subject: str) -> list[str]:
+def extract_variables(content: str, subject: str) -> list[str]:
     pattern = r'\{\{\s*(\w+)\s*\}\}'
-    return list(set(re.findall(pattern, html + subject)))
+    return list(set(re.findall(pattern, content + subject)))
 
 
 def sanitize_html(html: str) -> str:
+    """Light sanitization for text-mode content (no inline styles needed)."""
     return bleach.clean(html, tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRIBUTES, strip=False)
+
+
+def _prepare_html(html_body: str, mode: str) -> str:
+    """For text mode, apply sanitization. For custom mode, trust the user's HTML as-is."""
+    if mode == "custom":
+        return html_body
+    return sanitize_html(html_body)
 
 
 def render_template_with_context(template: EmailTemplate, context: dict) -> RenderedEmail:
@@ -52,14 +60,15 @@ def render_template_with_context(template: EmailTemplate, context: dict) -> Rend
 
 
 async def create_template(db: AsyncSession, data: TemplateCreate, created_by: uuid.UUID) -> EmailTemplate:
-    sanitized_html = sanitize_html(data.html_body)
-    variables = extract_variables(sanitized_html, data.subject)
+    html = _prepare_html(data.html_body, data.mode)
+    variables = extract_variables(html, data.subject)
     template = EmailTemplate(
         name=data.name,
         subject=data.subject,
-        html_body=sanitized_html,
+        html_body=html,
         text_body=data.text_body,
         variables=variables,
+        mode=data.mode,
         created_by=created_by,
     )
     db.add(template)
@@ -79,15 +88,17 @@ async def get_template(db: AsyncSession, template_id: uuid.UUID) -> EmailTemplat
 
 
 async def update_template(db: AsyncSession, template: EmailTemplate, data: TemplateUpdate) -> EmailTemplate:
+    if data.mode is not None:
+        template.mode = data.mode
     if data.name is not None:
         template.name = data.name
     if data.subject is not None:
         template.subject = data.subject
     if data.html_body is not None:
-        template.html_body = sanitize_html(data.html_body)
+        mode = data.mode or template.mode
+        template.html_body = _prepare_html(data.html_body, mode)
     if data.text_body is not None:
         template.text_body = data.text_body
-    # Re-extract variables
     template.variables = extract_variables(template.html_body, template.subject)
     await db.flush()
     await db.refresh(template)

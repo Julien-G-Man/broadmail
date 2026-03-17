@@ -4,17 +4,19 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useList, useListContacts, useRemoveContactFromList } from "@/hooks/useContacts";
 import { formatDate } from "@/lib/utils";
-import { ArrowLeft, Users, Trash2, AlertCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, Users, Trash2, AlertCircle, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { useState } from "react";
+import ContactImportModal from "@/components/contacts/ContactImportModal";
 
 export default function ListDetailPage() {
   const params = useParams();
   const id = params.id as string;
 
   const [page, setPage] = useState(1);
-  const { data: list, isLoading: listLoading } = useList(id);
-  const { data, isLoading: contactsLoading } = useListContacts(id, { page });
+  const [showImport, setShowImport] = useState(false);
+  const { data: list, isLoading: listLoading, refetch: refetchList } = useList(id);
+  const { data, isLoading: contactsLoading, refetch: refetchContacts } = useListContacts(id, { page });
   const removeContact = useRemoveContactFromList();
 
   const handleRemove = async (contactId: string, email: string) => {
@@ -66,9 +68,17 @@ export default function ListDetailPage() {
               <p className="text-text-secondary text-sm mt-0.5">{list.description}</p>
             )}
           </div>
-          <div className="flex items-center gap-2 text-sm text-text-muted">
-            <Users className="w-4 h-4" />
-            <span>{list.member_count.toLocaleString()} contacts</span>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 text-sm text-text-muted">
+              <Users className="w-4 h-4" />
+              <span>{list.member_count.toLocaleString()} contacts</span>
+            </div>
+            <button
+              onClick={() => setShowImport(true)}
+              className="btn-primary flex items-center gap-1.5 text-sm"
+            >
+              <Upload className="w-3.5 h-3.5" /> Import to this list
+            </button>
           </div>
         </div>
       </div>
@@ -149,6 +159,18 @@ export default function ListDetailPage() {
           </table>
         )}
       </div>
+
+      {showImport && (
+        <ContactImportModal
+          defaultListId={id}
+          onClose={() => setShowImport(false)}
+          onSuccess={() => {
+            setShowImport(false);
+            refetchList();
+            refetchContacts();
+          }}
+        />
+      )}
 
       {/* Pagination */}
       {data && data.total > data.page_size && (
