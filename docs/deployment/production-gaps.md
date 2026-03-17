@@ -13,7 +13,7 @@ Tracked against the original gap list. Items marked ✅ are resolved.
 | 3 | SMTP TLS inverted logic | ✅ Fixed — `starttls()` called only when `SMTP_USE_TLS=true` |
 | 4 | CORS OPTIONS preflight returning 400 | ✅ Fixed — middleware order corrected; CORS runs before SlowAPI |
 | 5 | Token refresh in frontend | N/A — no refresh tokens exist. Access token is 7 days; no interceptor needed. |
-| 6 | Scheduled campaign execution (ARQ worker) | Pending — Redis + ARQ worker not deployed yet |
+| 6 | Scheduled campaign execution (ARQ worker) | ✅ Implemented in code — requires Redis + ARQ worker deployment to run in production |
 
 ---
 

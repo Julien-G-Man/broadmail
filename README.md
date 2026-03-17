@@ -47,7 +47,7 @@ broadmail/
 │   ├── app/
 │   │   ├── main.py
 │   │   ├── core/          # config, database, security, dependencies, exceptions
-│   │   ├── auth/          # login, refresh, logout
+│   │   ├── auth/          # login, current-user endpoint
 │   │   ├── users/         # admin user management
 │   │   ├── contacts/      # contacts, lists, CSV/XLSX import
 │   │   ├── templates/     # email templates, Jinja2 preview
@@ -184,12 +184,10 @@ NEXT_PUBLIC_API_URL=https://your-backend-domain
 
 ```
 POST   /api/auth/login
-POST   /api/auth/refresh
 GET    /api/auth/me
 
 # Auth
-POST   /api/auth/login          POST /api/auth/refresh
-POST   /api/auth/logout         GET  /api/auth/me
+POST   /api/auth/login          GET  /api/auth/me
 
 # Users (admin only)
 GET    /api/users               POST /api/users
@@ -242,7 +240,7 @@ Full route reference in [`CLAUDE.md`](./CLAUDE.md).
 
 ## Security
 
-- **JWT**: 15-min access tokens, 7-day refresh tokens (rotated, stored hashed)
+- **JWT**: Single 7-day access token, no refresh token flow
 - **Passwords**: bcrypt cost factor 12
 - **Rate limiting**: 5 req/min on login, 100 req/min elsewhere (per IP)
 - **CORS**: exact frontend domain only — never `*`
@@ -270,6 +268,7 @@ Full route reference in [`CLAUDE.md`](./CLAUDE.md).
 4. Deploy frontend to Vercel, point `NEXT_PUBLIC_API_URL` at the Railway backend.
 5. Register Resend webhook: `https://your-backend/webhooks/resend`
 6. Run `python -m app.scripts.create_admin` once, then remove `FIRST_ADMIN_*` env vars.
+6. Set `FIRST_ADMIN_EMAIL` and `FIRST_ADMIN_PASSWORD` as persistent login credentials.
 
 ### Deployment Checklist
 
@@ -278,9 +277,9 @@ Full route reference in [`CLAUDE.md`](./CLAUDE.md).
 - [ ] Migrations run before app start
 - [ ] ARQ worker running as a separate service
 - [ ] Resend webhook registered
-- [ ] `FIRST_ADMIN_*` env vars removed after first run
+- [ ] `FIRST_ADMIN_*` env vars set and kept permanently
 - [ ] HTTPS enforced on both services
-- [ ] `GET /health` returns `{"status": "ok"}`
+- [ ] `GET /health` returns `{"status": "API is ok"}`
 
 ---
 

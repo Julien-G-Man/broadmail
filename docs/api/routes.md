@@ -261,10 +261,10 @@ Handled events:
 
 ### `GET /health`
 ```json
-{ "status": "ok" }
+{ "status": "API is ok" }
 ```
 
 ### `GET /`
 ```json
-{ "status": "BroadMail API is live. Got to /docs to see API docs." }
+{ "status": "BroadMail API is Live." }
 ```

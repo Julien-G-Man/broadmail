@@ -36,9 +36,9 @@ Tests use **SQLite in-memory** (via `aiosqlite`) — no real PostgreSQL needed.
 | `test_engine` | session | In-memory SQLite, creates all tables |
 | `db_session` | function | Fresh session per test, rolled back after |
 | `client` | function | `httpx.AsyncClient` with DB override and `FIRST_ADMIN_EMAIL` / `FIRST_ADMIN_PASSWORD` set in env |
-| `admin_user` | function | Dict with `email` / `password` matching the test env vars — used to obtain a JWT via `POST /api/auth/login` |
+| `admin_user` | function | Creates a unique admin DB user for model-level tests (auth still uses env credentials) |
 
-Note: `admin_user` does not create a database row. Auth is env-var based. Tests authenticate by hitting `POST /api/auth/login` with the env credentials and using the returned token for subsequent requests.
+Note: Auth is env-var based. Tests authenticate by hitting `POST /api/auth/login` with test env credentials and reuse a cached Authorization header to avoid login rate-limit noise.
 
 The `get_db` dependency is overridden per test to use the test session.
 
@@ -73,6 +73,7 @@ Auth tests hit the login endpoint with env credentials (`FIRST_ADMIN_EMAIL` / `F
 | `test_create_campaign` | Creates draft campaign |
 | `test_list_campaigns` | Returns campaign array |
 | `test_campaign_status_transitions` | draft→scheduled→cancelled |
+| `test_dispatch_scheduled_campaigns_enqueues_due_campaign` | scheduled campaigns are auto-queued by ARQ cron dispatcher |
 
 ### `test_sending.py`
 | Test | What it verifies |
@@ -80,6 +81,7 @@ Auth tests hit the login endpoint with env credentials (`FIRST_ADMIN_EMAIL` / `F
 | `test_dispatcher_uses_resend_when_configured` | Uses ResendProvider when API key set |
 | `test_dispatcher_falls_back_to_smtp_when_resend_fails` | Falls back to SMTP on exception |
 | `test_dispatcher_raises_when_no_provider` | RuntimeError if neither configured |
+| `test_resend_provider_uses_to_thread_wrapper` | Resend synchronous SDK call is wrapped in `asyncio.to_thread()` |
 
 Sending tests mock the providers — **never call real Resend/SMTP in tests**.
 

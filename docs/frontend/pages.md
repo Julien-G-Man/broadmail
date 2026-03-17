@@ -104,10 +104,16 @@ Save → `POST /api/templates` or `PATCH /api/templates/{id}`
 - 3-step wizard:
   1. **Details** — name, from name, from email, reply-to, template picker
   2. **Audience** — checkbox list of contact lists with live recipient count
-  3. **Review** — summary + "Send Now" (primary) + "Save as Draft" (secondary)
+  3. **Review** — summary + delivery mode selector + actions:
+     - **Send Now**
+     - **Schedule** with date/time input (calls `/api/campaigns/{id}/schedule`)
+     - **Save as Draft**
+
+The wizard creates the campaign first, then performs send/schedule action based on the selected delivery mode.
 
 ### Campaign Detail (`/campaigns/[id]`)
 - Status badge + Send Now / Cancel actions
+- Shows `scheduled_at` in metadata and under the title when available
 - Analytics cards: Open Rate, Click Rate, Bounced, Unsubscribed
 - Recharts funnel: Sent → Delivered → Opened → Clicked → Bounced
 
@@ -164,7 +170,8 @@ Save → `POST /api/templates` or `PATCH /api/templates/{id}`
 
 ### `useCampaigns.ts`
 - `useCampaigns()` / `useCampaign(id)` / `useCampaignStats(id)`
-- `useCreateCampaign()` / `useSendCampaign()` / `useCancelCampaign()` / `useDeleteCampaign()`
+- `useCreateCampaign()` / `useSendCampaign()` / `useScheduleCampaign()` / `useCancelCampaign()` / `useDeleteCampaign()`
+- Mutations invalidate both campaign list and campaign detail/stat query keys
 
 ---
 

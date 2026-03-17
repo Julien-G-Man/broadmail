@@ -8,8 +8,7 @@ Loads all settings from environment variables via `pydantic-settings`. Single `s
 Key settings:
 - `SECRET_KEY` — used for JWT signing (access tokens + tracking tokens)
 - `UNSUBSCRIBE_SECRET` — separate key for unsubscribe tokens
-- `ACCESS_TOKEN_EXPIRE_MINUTES` = 15
-- `REFRESH_TOKEN_EXPIRE_DAYS` = 7
+- Access token lifetime is fixed to 7 days in auth router
 - `allowed_origins_list` — parsed from comma-separated `ALLOWED_ORIGINS`
 
 ### `database.py`
@@ -159,7 +158,7 @@ Delete returns `409 Conflict` with a descriptive message if any campaign referen
 draft → scheduled (via /schedule)
 draft → queued    (via /send)
 scheduled → cancelled (via /cancel)
-scheduled → queued (ARQ scheduler, not yet implemented — see production gap)
+scheduled → queued (via ARQ cron dispatcher when scheduled_at <= now)
 queued → sending → sent
 any → failed (on error)
 ```
@@ -177,7 +176,7 @@ any → failed (on error)
 Abstract base: `BaseEmailProvider.send_batch(messages) → list[SendResult]`
 
 ### `resend_provider.py`
-`ResendProvider` — calls `resend.Emails.send()` per message. Returns `SendResult(success, provider_id, error)`.
+`ResendProvider` — calls `resend.Emails.send()` per message inside `asyncio.to_thread()` to avoid blocking the async event loop. Returns `SendResult(success, provider_id, error)`.
 
 ### `smtp_provider.py`
 `SMTPProvider` — uses `aiosmtplib`, builds `MIMEMultipart("alternative")` with text + html parts, sends per message.
@@ -196,6 +195,11 @@ ARQ job `process_campaign(ctx, campaign_id)`:
 - Per recipient: checks `is_suppressed`, renders template, injects tracking pixel, wraps links, injects unsubscribe footer
 - Calls `send_batch_with_fallback`, marks each recipient sent/failed/skipped
 - Sets campaign status to `sent` or `failed`
+
+ARQ cron `dispatch_scheduled_campaigns(ctx)`:
+- Runs every minute
+- Selects campaigns where `status == "scheduled"` and `scheduled_at <= now`
+- Prepares recipients, sets campaign to `queued`, enqueues `process_campaign`
 
 ---
 

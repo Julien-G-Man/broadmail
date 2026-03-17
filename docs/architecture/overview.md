@@ -136,7 +136,7 @@ No refresh tokens. No logout endpoint. The access token is valid for 7 days.
 ```
 backend/app/
 ├── core/           Infrastructure: config, DB session, JWT, Depends
-├── auth/           Login, token issuance/rotation, logout
+├── auth/           Login and current-user endpoint (env-var admin auth)
 ├── users/          Admin CRUD (no self-signup)
 ├── contacts/       Contact + List CRUD, CSV/XLSX import
 ├── templates/      Email templates, Jinja2 rendering, sanitization

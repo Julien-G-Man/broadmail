@@ -10,7 +10,7 @@
 | Email (primary) | Transactional email | Resend |
 | Email (fallback) | SMTP | Gmail / Zoho |
 
-> Redis / ARQ worker is optional until scheduled campaigns are needed. Skip it for the initial deploy.
+> Redis + ARQ worker are required for campaign sending and scheduling. Without them, send requests will return 503.
 
 ---
 
@@ -149,6 +149,7 @@ SMTP_USER=your@gmail.com
 SMTP_PASSWORD=app-specific-password
 TRACKING_BASE_URL=http://localhost:5000/
 UNSUBSCRIBE_SECRET=dev-unsubscribe-secret
+REDIS_URL=redis://localhost:6379
 ```
 
 Create tables on first run (no Alembic needed for SQLite dev):
