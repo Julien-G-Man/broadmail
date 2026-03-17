@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import api from "@/lib/api";
-import { Campaign, CampaignStats, PaginatedResponse } from "@/types";
+import { Campaign, CampaignStats, SendCampaignResponse } from "@/types";
 
 function invalidateCampaignQueries(queryClient: ReturnType<typeof useQueryClient>, id?: string) {
   queryClient.invalidateQueries({ queryKey: ["campaigns"] });
@@ -53,7 +53,8 @@ export function useCreateCampaign() {
 export function useSendCampaign() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => api.post(`/api/campaigns/${id}/send`).then((r) => r.data),
+    mutationFn: (id: string) =>
+      api.post<SendCampaignResponse>(`/api/campaigns/${id}/send`).then((r) => r.data),
     onSuccess: (_campaign, id) => invalidateCampaignQueries(qc, id),
   });
 }

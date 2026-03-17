@@ -68,7 +68,7 @@ app.include_router(webhooks_router)
 
 @app.get("/")
 async def root():
-    return {"status": "BroadMail API is Live."}
+    return {"status": "BroadMail API is Live. \nThis is an API and not a website lol :) "}
 
 @app.get("/health")
 async def health():

@@ -2,11 +2,12 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.dependencies import get_current_active_user
 from app.campaigns.schemas import (
     CampaignCreate, CampaignUpdate, CampaignRead,
-    CampaignStats, ScheduleRequest, RecipientRead,
+    CampaignStats, ScheduleRequest, RecipientRead, SendCampaignResponse,
 )
 from app.campaigns import service
 
@@ -73,7 +74,7 @@ async def delete_campaign(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/{campaign_id}/send", response_model=CampaignRead)
+@router.post("/{campaign_id}/send", response_model=SendCampaignResponse)
 async def send_campaign(
     campaign_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
@@ -89,19 +90,32 @@ async def send_campaign(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # Enqueue ARQ job — per spec, return 503 if Redis is unavailable
-    try:
-        from app.core.config import settings
-        import arq
-        import structlog
-        redis = await arq.create_pool(arq.connections.RedisSettings.from_dsn(settings.REDIS_URL))
-        await redis.enqueue_job("process_campaign", str(campaign_id))
-        await redis.aclose()
-    except Exception as e:
-        structlog.get_logger().error("arq_enqueue_failed", campaign_id=str(campaign_id), error=str(e))
-        raise HTTPException(status_code=503, detail="Queue unavailable — please retry shortly")
+    if settings.SEND_MODE == "inline":
+        # Inline mode is useful for low-cost deployments without a dedicated worker.
+        try:
+            from app.sending.worker import process_campaign
 
-    return campaign
+            await process_campaign({}, str(campaign_id))
+            await db.refresh(campaign)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Inline send failed: {e}")
+    else:
+        # Queue mode (default): enqueue job and let the worker process recipients.
+        try:
+            import arq
+            import structlog
+
+            redis = await arq.create_pool(arq.connections.RedisSettings.from_dsn(settings.REDIS_URL))
+            await redis.enqueue_job("process_campaign", str(campaign_id))
+            await redis.aclose()
+        except Exception as e:
+            structlog.get_logger().error("arq_enqueue_failed", campaign_id=str(campaign_id), error=str(e))
+            raise HTTPException(status_code=503, detail="Queue unavailable — please retry shortly")
+
+    return {
+        "campaign": campaign,
+        "delivery_mode": settings.SEND_MODE,
+    }
 
 
 @router.post("/{campaign_id}/schedule", response_model=CampaignRead)
@@ -111,6 +125,12 @@ async def schedule_campaign(
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_active_user),
 ):
+    if settings.SEND_MODE == "inline":
+        raise HTTPException(
+            status_code=400,
+            detail="Scheduling requires SEND_MODE=queue and a running worker",
+        )
+
     campaign = await service.get_campaign(db, campaign_id)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")

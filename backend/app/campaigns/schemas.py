@@ -69,3 +69,8 @@ class RecipientRead(BaseModel):
     processed_at: datetime | None
 
     model_config = {"from_attributes": True}
+
+
+class SendCampaignResponse(BaseModel):
+    campaign: CampaignRead
+    delivery_mode: str

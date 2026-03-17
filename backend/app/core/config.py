@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     UNSUBSCRIBE_SECRET: str
     
     REDIS_URL: str = "redis://localhost:6379"
+    SEND_MODE: str = "queue"  # queue | inline
 
     RESEND_API_KEY: str = ""
     RESEND_WEBHOOK_SECRET: str = ""
@@ -58,6 +59,14 @@ class Settings(BaseSettings):
         if "://" not in v:
             # Accept host:port style env values and normalize for ARQ.
             return f"redis://{v}"
+        return v
+
+    @field_validator("SEND_MODE", mode="before")
+    @classmethod
+    def normalize_send_mode(cls, value: str) -> str:
+        v = (value or "queue").strip().lower()
+        if v not in {"queue", "inline"}:
+            raise ValueError("SEND_MODE must be either 'queue' or 'inline'")
         return v
 
     @model_validator(mode="after")

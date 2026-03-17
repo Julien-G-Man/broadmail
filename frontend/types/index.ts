@@ -57,6 +57,11 @@ export interface Campaign {
   created_at: string;
 }
 
+export interface SendCampaignResponse {
+  campaign: Campaign;
+  delivery_mode: "queue" | "inline";
+}
+
 export interface CampaignStats {
   total_recipients: number;
   sent: number;
