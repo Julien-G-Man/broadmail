@@ -40,7 +40,10 @@ app = FastAPI(
 
 app.state.limiter = limiter
 
-# CORS
+# Middleware order: last added = first to run.
+# SlowAPI must be added first so CORS (added last) runs outermost and
+# handles OPTIONS preflights before the rate limiter ever sees them.
+app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins_list,
@@ -48,7 +51,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.add_middleware(SlowAPIMiddleware)
 
 # Exception handlers
 app.add_exception_handler(HTTPException, http_exception_handler)

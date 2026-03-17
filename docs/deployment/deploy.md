@@ -2,183 +2,180 @@
 
 ## Services Required
 
-| Service | Purpose | Recommended |
-|---------|---------|-------------|
-| Backend hosting | FastAPI app | Railway |
-| Frontend hosting | Next.js app | Vercel |
-| Database | PostgreSQL 15+ | Railway Postgres |
-| Cache/Queue | Redis (ARQ) | Railway Redis or Upstash |
-| Email primary | Transactional email | Resend |
-| Email fallback | SMTP | Gmail or Zoho |
+| Service | Purpose | Provider |
+|---------|---------|----------|
+| Backend API | FastAPI app + Alembic migrations | Render (Web Service) |
+| Database | PostgreSQL 17 | Neon DB |
+| Frontend | Next.js app | Vercel |
+| Email (primary) | Transactional email | Resend |
+| Email (fallback) | SMTP | Gmail / Zoho |
+
+> Redis / ARQ worker is optional until scheduled campaigns are needed. Skip it for the initial deploy.
 
 ---
 
-## Backend — Railway
+## Backend — Render
 
-### 1. Create Project
-
-```bash
-# Install Railway CLI
-npm install -g @railway/cli
-railway login
-railway init
+### Build Command
+```
+pip install -r requirements.txt && alembic upgrade head
 ```
 
-### 2. Add Services
+### Start Command
+```
+python run.py
+```
 
-In the Railway dashboard, add:
-- **PostgreSQL** plugin → copy `DATABASE_URL`
-- **Redis** plugin → copy `REDIS_URL`
+Render injects a `PORT` env var automatically. `run.py` reads it:
+```python
+port = int(os.environ.get("PORT", 5000))
+```
+Do not hardcode or set a `PORT` env var yourself.
 
-### 3. Environment Variables
-
-Set these in Railway → Settings → Variables:
+### Environment Variables (Render dashboard)
 
 ```env
 APP_ENV=production
-SECRET_KEY=<64-char hex: python -c "import secrets; print(secrets.token_hex(32))">
-ALLOWED_ORIGINS=https://your-app.vercel.app
+SECRET_KEY=<64-char random hex — openssl rand -hex 32>
+ALLOWED_ORIGINS=https://your-frontend.vercel.app
 
-DATABASE_URL=postgresql+asyncpg://...   (from Railway Postgres)
-REDIS_URL=redis://...                    (from Railway Redis)
+# Neon DB — paste the connection string exactly as Neon gives it.
+# The app auto-strips ?sslmode=require&channel_binding=require and
+# passes ssl='require' to asyncpg correctly. No manual editing needed.
+DATABASE_URL=postgresql://user:pass@ep-xxx.region.aws.neon.tech/neondb?sslmode=require&channel_binding=require
 
 RESEND_API_KEY=re_xxxxxxxxxxxx
 RESEND_WEBHOOK_SECRET=whsec_xxxxxxxxxxxx
 
-SMTP_HOST=smtp.gmail.com                (optional — fallback only)
+SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
-SMTP_USER=yourorg@gmail.com
+SMTP_USER=your@gmail.com
 SMTP_PASSWORD=app-specific-password
 SMTP_USE_TLS=true
 
-TRACKING_BASE_URL=https://your-backend.railway.app/
-UNSUBSCRIBE_SECRET=<64-char hex: separate from SECRET_KEY>
+TRACKING_BASE_URL=https://your-backend.onrender.com/
+UNSUBSCRIBE_SECRET=<separate long random string>
 
-FIRST_ADMIN_EMAIL=admin@enactusknust.com
-FIRST_ADMIN_PASSWORD=<temporary strong password>
+FIRST_ADMIN_EMAIL=admin@yourorg.com
+FIRST_ADMIN_PASSWORD=<strong temp password — change after first login>
 ```
 
-### 4. Start Command
+> After first deploy, create the admin account, then remove `FIRST_ADMIN_EMAIL` / `FIRST_ADMIN_PASSWORD` from env vars.
 
-In Railway → Settings → Deploy:
+### Neon DB URL handling
 
-```
-alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
-```
+Neon's connection strings contain query parameters (`?sslmode=require&channel_binding=require`) that asyncpg cannot accept in the URL. The app handles this automatically in `app/core/database.py` and `alembic/env.py`:
 
-### 5. ARQ Worker
+1. Rewrites `postgresql://` → `postgresql+asyncpg://`
+2. Strips the entire query string from the URL using `urllib.parse`
+3. Passes `ssl='require'` as a `connect_arg` to asyncpg
 
-Add a **second service** in Railway (same repo), with start command:
-
-```
-python -m arq app.sending.worker.WorkerSettings
-```
-
-The worker must share the same env vars (same Redis + DB).
-
-### 6. Seed Admin
-
-After first deploy:
-```bash
-railway run python -m app.scripts.create_admin
-```
-Then **remove** `FIRST_ADMIN_EMAIL` and `FIRST_ADMIN_PASSWORD` from env.
+**Paste the Neon URL as-is. Do not edit it.**
 
 ---
 
 ## Frontend — Vercel
 
-### 1. Import Repository
-
-- Go to [vercel.com](https://vercel.com) → New Project
-- Import the `broadmail` repo
-- Set **Root Directory** to `frontend`
-- Framework preset: **Next.js**
-
-### 2. Environment Variables
+### Environment Variables
 
 ```env
-NEXTAUTH_URL=https://your-app.vercel.app
-NEXTAUTH_SECRET=<64-char hex: separate from backend secrets>
-NEXT_PUBLIC_API_URL=https://your-backend.railway.app
+NEXT_PUBLIC_API_URL=https://your-backend.onrender.com
 ```
 
-### 3. Deploy
+> `NEXTAUTH_URL` and `NEXTAUTH_SECRET` are not needed — auth is handled by backend JWT. The frontend has no next-auth dependency at runtime.
 
-Vercel auto-deploys on push to `main`.
+### Build Settings (Vercel dashboard)
 
----
-
-## Resend Webhook Setup
-
-1. In [Resend Dashboard](https://resend.com) → Webhooks → Add Endpoint
-2. URL: `https://your-backend.railway.app/webhooks/resend`
-3. Events to subscribe:
-   - `email.bounced`
-   - `email.complained`
-   - `email.delivered`
-   - `email.delivery_delayed`
-4. Copy the **Signing Secret** → set as `RESEND_WEBHOOK_SECRET`
+- **Root directory**: `frontend`
+- **Build command**: `npm run build` (default)
+- **Output directory**: `.next` (default)
 
 ---
 
-## Pre-Launch Checklist
+## Resend Webhook
 
-### Security
-- [ ] `SECRET_KEY` is a 64-char random hex string (not a guessable value)
-- [ ] `UNSUBSCRIBE_SECRET` is a separate 64-char random hex string
-- [ ] `NEXTAUTH_SECRET` is a separate 64-char random hex string
-- [ ] `ALLOWED_ORIGINS` is the exact Vercel URL (no trailing slash, no wildcards)
-- [ ] `FIRST_ADMIN_EMAIL` / `FIRST_ADMIN_PASSWORD` env vars removed after admin seeded
-- [ ] HTTPS enforced on both frontend (Vercel auto) and backend (Railway auto)
-
-### Infrastructure
-- [ ] Database migrations run before app start (`alembic upgrade head` in start command)
-- [ ] ARQ worker running as a separate Railway service
-- [ ] Resend webhook URL registered in Resend dashboard
-- [ ] `RESEND_WEBHOOK_SECRET` set and matches Resend dashboard signing secret
-- [ ] Health check: `GET /health` returns `{"status": "ok"}`
-
-### Functionality
-- [ ] Admin user created via `create_admin` script
-- [ ] Login works end-to-end
-- [ ] Test CSV import with a small file (3–5 rows)
-- [ ] Create a template with a variable
-- [ ] Create a campaign, link to template + list
-- [ ] Send a test campaign to 1 real contact
-- [ ] Verify tracking pixel fires (check analytics/overview)
-- [ ] Verify unsubscribe link works (click → confirm "unsubscribed" page → check contact.is_suppressed)
-- [ ] Test Resend webhook by manually triggering a delivery event
+1. Go to Resend dashboard → Webhooks → Add endpoint
+2. URL: `https://your-backend.onrender.com/webhooks/resend`
+3. Events: `email.delivered`, `email.bounced`, `email.complained`
+4. Copy the signing secret → set as `RESEND_WEBHOOK_SECRET`
 
 ---
 
-## Environment Variable Reference
+## CORS
 
-### Backend `.env`
+`ALLOWED_ORIGINS` must be a comma-separated list of exact frontend origins. No trailing slashes, no wildcards in production.
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `APP_ENV` | Yes | `production` or `development` |
-| `SECRET_KEY` | Yes | 64-char hex, JWT signing |
-| `ALLOWED_ORIGINS` | Yes | Frontend URL (comma-separated if multiple) |
-| `DATABASE_URL` | Yes | `postgresql+asyncpg://...` |
-| `REDIS_URL` | Yes | `redis://...` |
-| `RESEND_API_KEY` | One of | `re_...` from Resend |
-| `RESEND_WEBHOOK_SECRET` | One of | `whsec_...` from Resend |
-| `SMTP_HOST` | One of | SMTP hostname (fallback) |
-| `SMTP_PORT` | No | Default 587 |
-| `SMTP_USER` | No | SMTP username |
-| `SMTP_PASSWORD` | No | SMTP password |
-| `SMTP_USE_TLS` | No | Default `true` |
-| `TRACKING_BASE_URL` | Yes | Backend public URL with trailing slash |
-| `UNSUBSCRIBE_SECRET` | Yes | Separate 64-char hex |
-| `FIRST_ADMIN_EMAIL` | Seed only | Remove after seeding |
-| `FIRST_ADMIN_PASSWORD` | Seed only | Remove after seeding |
+```
+ALLOWED_ORIGINS=https://broadmail.vercel.app
+```
 
-### Frontend `.env.local`
+---
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `NEXTAUTH_URL` | Yes | Frontend public URL |
-| `NEXTAUTH_SECRET` | Yes | 64-char hex, next-auth signing |
-| `NEXT_PUBLIC_API_URL` | Yes | Backend public URL (no trailing slash) |
+## Pre-launch Checklist
+
+- [ ] `SECRET_KEY` is a 64-char random hex string
+- [ ] `UNSUBSCRIBE_SECRET` is set (different from `SECRET_KEY`)
+- [ ] `ALLOWED_ORIGINS` matches exact frontend domain (no trailing slash)
+- [ ] Neon DB migrations ran cleanly — check `alembic upgrade head` in build logs
+- [ ] Resend webhook URL registered and signing secret matches env var
+- [ ] First admin account created and temp password changed
+- [ ] `FIRST_ADMIN_EMAIL` / `FIRST_ADMIN_PASSWORD` removed from env after first run
+- [ ] `APP_ENV=production` set (disables `/docs`, `/redoc`, SQLAlchemy echo, uvicorn reload)
+- [ ] HTTPS on both frontend and backend (automatic on Vercel/Render)
+- [ ] Health check: `GET https://your-backend.onrender.com/health` → `{"status":"ok"}`
+
+---
+
+## Local Development
+
+### Backend
+```bash
+cd backend
+mailenv\Scripts\activate       # Windows
+source mailenv/bin/activate    # Mac/Linux
+
+python run.py
+# http://localhost:5000 with auto-reload
+```
+
+Local `.env` (SQLite, no Redis needed):
+```env
+APP_ENV=development
+SECRET_KEY=dev-secret-key
+DATABASE_URL=sqlite+aiosqlite:///./broadmail.db
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:3003
+SMTP_USER=your@gmail.com
+SMTP_PASSWORD=app-specific-password
+TRACKING_BASE_URL=http://localhost:5000/
+UNSUBSCRIBE_SECRET=dev-unsubscribe-secret
+```
+
+Create tables on first run (no Alembic needed for SQLite dev):
+```bash
+mailenv\Scripts\python create_tables.py
+```
+
+Or run migrations normally:
+```bash
+alembic upgrade head
+```
+
+### Frontend
+```bash
+cd frontend
+npm run dev
+# http://localhost:3000 (or next available port if busy)
+```
+
+Local `frontend/.env`:
+```env
+NEXT_PUBLIC_API_URL=http://localhost:5000
+```
+
+### PostCSS / Tailwind
+
+A `postcss.config.mjs` is required at `frontend/` root for Tailwind to compile. Without it, `@tailwind` and `@apply` directives are served raw and no styles apply. The file is committed — do not delete it.
+
+### Auth in dev mode
+
+Auth is disabled. All backend routes return a dummy admin (`app/core/dependencies.py`). The frontend has no auth redirects (`middleware.ts` empty matcher). To re-enable: restore the real dependency implementations and middleware config.

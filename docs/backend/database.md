@@ -139,13 +139,30 @@ Current migrations:
 
 ## Connection
 
-Uses `asyncpg` driver for async SQLAlchemy:
+Uses `asyncpg` driver via async SQLAlchemy. The app supports two backends:
 
+**Production (Neon / any Postgres):**
 ```
-DATABASE_URL=postgresql+asyncpg://user:pass@host:5432/broadmail
+DATABASE_URL=postgresql://user:pass@ep-xxx.neon.tech/neondb?sslmode=require&channel_binding=require
 ```
+Paste the Neon URL as-is. `app/core/database.py` normalises it automatically:
+- Rewrites `postgresql://` → `postgresql+asyncpg://`
+- Strips all query-string params (asyncpg rejects them in the URL)
+- Passes `ssl='require'` as a `connect_arg` when `sslmode=require` is detected
 
-Pool settings (in `core/database.py`):
+**Local development (SQLite):**
+```
+DATABASE_URL=sqlite+aiosqlite:///./broadmail.db
+```
+Pool settings (`pool_size`, `max_overflow`, `pool_pre_ping`) are skipped for SQLite automatically.
+
+**Postgres pool settings** (applied only for Postgres):
 - `pool_size=10`
 - `max_overflow=20`
 - `pool_pre_ping=True` — validates connections before use
+
+**Local table creation** (dev only, no Alembic needed):
+```bash
+mailenv\Scripts\python create_tables.py
+```
+Or use Alembic normally: `alembic upgrade head`

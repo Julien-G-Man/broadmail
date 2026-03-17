@@ -5,113 +5,122 @@
 ```
 app/
 ├── (auth)/
-│   └── login/page.tsx          Public — only unauthenticated page
+│   └── login/page.tsx              Redirects to / immediately (auth disabled in dev)
 └── (dashboard)/
-    ├── layout.tsx               Auth-protected shell (sidebar + topbar)
-    ├── page.tsx                 Dashboard overview
+    ├── layout.tsx                   No-auth shell: Sidebar + TopBar
+    ├── page.tsx                     Dashboard overview
     ├── contacts/
-    │   ├── page.tsx             Contacts table
-    │   └── lists/page.tsx       Contact lists grid
+    │   ├── page.tsx                 Contacts table + search + import
+    │   ├── [id]/page.tsx            Contact detail + event history
+    │   └── lists/
+    │       ├── page.tsx             Contact lists
+    │       └── [id]/page.tsx        List detail + member table
     ├── templates/
-    │   ├── page.tsx             Template gallery
-    │   └── new/page.tsx         Template builder
+    │   ├── page.tsx                 Template list (row layout)
+    │   ├── new/page.tsx             Template builder
+    │   └── [id]/edit/page.tsx       Edit existing template
     ├── campaigns/
-    │   ├── page.tsx             Campaigns table
-    │   ├── new/page.tsx         3-step campaign wizard
-    │   └── [id]/page.tsx        Campaign detail + analytics
-    └── settings/page.tsx        Admin: user management
+    │   ├── page.tsx                 Campaigns table (row layout)
+    │   ├── new/page.tsx             3-step campaign wizard
+    │   └── [id]/page.tsx            Campaign detail + analytics
+    └── settings/page.tsx            User management (admin always true in dev)
 ```
+
+---
+
+## Auth Status (dev mode)
+
+Auth is **disabled**. The middleware has an empty matcher — no redirects happen. The login page redirects straight to `/`. All API calls go without a token; the backend returns a dummy admin user for all protected routes.
+
+When auth is re-enabled:
+- Restore `middleware.ts` matcher
+- Restore `app/core/dependencies.py` real implementations
+- Restore `lib/api.ts` JWT interceptor
+- Re-add `SessionProvider` to `providers.tsx` if next-auth is used
 
 ---
 
 ## Pages
 
 ### Login (`/login`)
-- Form with email + password fields
-- `react-hook-form` + `zod` validation
-- Calls `next-auth signIn("credentials", ...)`
-- Redirects to `/` on success
-- Shows toast on invalid credentials
+- **Dev mode**: immediately redirects to `/` via `useEffect`
+- **Prod (when auth restored)**: email + password form, `zod` validation, calls backend `/api/auth/login`
 
 ### Dashboard (`/`)
 - Fetches `GET /api/analytics/overview`
-- 4 stat cards: Total Contacts, Total Campaigns, Emails Sent, Open Rate
-- Recent campaigns table with status badges
-- Skeleton loaders while loading
+- 4 stat cards: Total Contacts, Total Campaigns, Emails Delivered, Open Rate
+- 3-step quick-start cards (Import → Template → Campaign)
+- Recent campaigns list with status pills and skeleton loaders
 
 ### Contacts (`/contacts`)
-- Paginated table with search (debounced on input)
-- Status badge: Active (green) / Suppressed (red)
-- Delete with confirmation
+- Paginated table, avatar initials, search input
+- Inline "Add Contact" form (toggle)
 - "Import CSV" button opens `ContactImportModal`
+- Hover-reveal delete button
 - Pagination controls
 
+### Contact Detail (`/contacts/[id]`)
+- Contact info card with edit capability
+- Email event history table (sent, opened, clicked, bounced)
+
 ### Contact Lists (`/contacts/lists`)
-- Grid of list cards showing name, description, member count
-- Inline "Create List" form (toggle show/hide)
-- Delete with confirmation
+- Lists with name, member count, created date
+- Inline create form
+
+### List Detail (`/contacts/lists/[id]`)
+- List header with member count
+- Paginated member table
+- Remove-from-list button per row
 
 ### Templates (`/templates`)
-- Grid of template cards showing name, subject, variable tags
-- Edit / Delete actions per card
-- "New Template" → `/templates/new`
+- Row layout: avatar initials, name, variable chips, subject preview, date
+- Hover-reveal Edit / Delete actions
 
-### Template Editor (`/templates/new` and `/templates/[id]/edit`)
-- Split-pane layout: editor left, live preview right
-- `Tiptap` rich text editor with Bold, Italic, H2, Bullet List toolbar
-- Variable picker buttons insert `{{ first_name }}` etc. at cursor
-- Subject line field supports variables
-- Preview panel shows rendered HTML via `POST /api/templates/{id}/preview`
-- Save button creates/updates template
+### Template Editor (`/templates/new`, `/templates/[id]/edit`)
+- Tiptap rich text editor (Bold, Italic, H2, Bullet List)
+- Subject line input (supports `{{ variables }}`)
+- Variable picker buttons insert at cursor
+- Save → `POST /api/templates` or `PATCH /api/templates/{id}`
 
 ### Campaigns (`/campaigns`)
-- Table with name, status badge, recipient count, created date
-- Per-row actions: Send (draft), View Analytics (sent), Delete (draft/failed/cancelled)
+- Row layout: avatar, name, from name, status pill, recipients, date
+- Hover-reveal actions: Send (draft only), Analytics (sent only), Delete (draft/failed/cancelled)
 
 ### New Campaign (`/campaigns/new`)
-- 3-step wizard with progress indicator:
+- 3-step wizard:
   1. **Details** — name, from name, from email, reply-to, template picker
-  2. **Audience** — checkbox list of contact lists
-  3. **Review** — summary before creation
-- Creates campaign as draft → navigates to campaign detail
+  2. **Audience** — checkbox list of contact lists with live recipient count
+  3. **Review** — summary + "Send Now" (primary) + "Save as Draft" (secondary)
 
 ### Campaign Detail (`/campaigns/[id]`)
-- Header with status badge + Send Now / Cancel actions
-- Meta grid: from, reply-to, total recipients, completed at
-- Stats cards: Open Rate, Click Rate, Bounced, Unsubscribed
-- Bar chart (Recharts): Sent → Delivered → Opened → Clicked → Bounced funnel
+- Status badge + Send Now / Cancel actions
+- Analytics cards: Open Rate, Click Rate, Bounced, Unsubscribed
+- Recharts funnel: Sent → Delivered → Opened → Clicked → Bounced
 
 ### Settings (`/settings`)
-- Admin-only (shows shield icon for non-admins)
-- Users table: name, email, role badge, status badge, joined date
-- "Add User" form (inline toggle): name, email, password, role selector
-- Deactivate button per user (except self)
+- In dev mode: `isAdmin = true` always
+- Users table with role + status badges
+- Inline add-user form: name, email, password, role
 
 ---
 
 ## Components
 
 ### `components/layout/Sidebar.tsx`
-- 240px fixed left sidebar, `bg-brand` (deep navy)
-- Navigation links with active state highlight
-- Settings link shown only for `role === "admin"`
-- User info + sign out at bottom
+- 240px white sidebar, `border-r`
+- Active nav item: `#f0f1ff` background + 3px brand-colored left bar
+- Footer shows "dev mode · no auth" label in dev
 
 ### `components/layout/TopBar.tsx`
-- 56px header, derives page title from current pathname
+- 56px white header
+- Page title derived from current pathname via `META` map
+- Contextual CTA button (New Campaign, New Template, etc.) shown per page
 
 ### `components/contacts/ContactImportModal.tsx`
-- `react-dropzone` with CSV/XLSX accept
-- Drag-and-drop zone + file picker fallback
-- Shows selected file with size
-- POSTs `multipart/form-data` to `/api/contacts/import`
-- Reports: `N added, N skipped, N invalid`
-
-### `components/templates/TemplateEditor.tsx`
-- Tiptap editor with StarterKit + Link + Placeholder extensions
-- Toolbar: Bold, Italic, H2, Bullet List
-- Variable insertion at cursor position
-- Right panel: live HTML preview via `<iframe>` or content preview
+- Dropzone (CSV / XLSX)
+- Three list modes: **New list** (type a name, creates it first), **Existing list** (dropdown), **No list**
+- POSTs file to `/api/contacts/import?list_id=...`
+- Shows `N created, N skipped, N invalid` result
 
 ---
 
@@ -119,43 +128,52 @@ app/
 
 ### `useContacts.ts`
 - `useContacts(params)` — paginated list with search/filter
-- `useContact(id)` — single contact
-- `useCreateContact()` — mutation
-- `useDeleteContact()` — mutation
-- `useContactLists()` — all lists
-- `useCreateList()` / `useDeleteList()` — mutations
+- `useContact(id)` — single contact + events
+- `useContactEvents(id)` — email event history
+- `useCreateContact()` / `useUpdateContact()` / `useDeleteContact()`
+- `useContactLists()` / `useList(id)` / `useListContacts(listId, params)`
+- `useCreateList()` / `useDeleteList()` / `useRemoveContactFromList()`
 
 ### `useTemplates.ts`
-- `useTemplates()` — all templates
-- `useTemplate(id)` — single template
-- `useCreateTemplate()` / `useUpdateTemplate()` / `useDeleteTemplate()` — mutations
-- `usePreviewTemplate()` — mutation (POST to `/preview`)
+- `useTemplates()` / `useTemplate(id)`
+- `useCreateTemplate()` / `useUpdateTemplate()` / `useDeleteTemplate()`
+- `usePreviewTemplate()` — POST to `/api/templates/{id}/preview`
 
 ### `useCampaigns.ts`
-- `useCampaigns()` — all campaigns
-- `useCampaign(id)` — single campaign
-- `useCampaignStats(id)` — analytics
-- `useCreateCampaign()` / `useSendCampaign()` / `useCancelCampaign()` / `useDeleteCampaign()` — mutations
+- `useCampaigns()` / `useCampaign(id)` / `useCampaignStats(id)`
+- `useCreateCampaign()` / `useSendCampaign()` / `useCancelCampaign()` / `useDeleteCampaign()`
 
 ---
 
-## Auth (`lib/auth.ts`)
+## Styling
 
-next-auth v5 with `Credentials` provider:
-1. Calls `POST /api/auth/login` with email/password
-2. Calls `GET /api/auth/me` with returned access token
-3. Stores `{ id, email, name, role, accessToken, refreshToken }` in JWT session
-4. `callbacks.jwt` — puts accessToken into JWT
-5. `callbacks.session` — exposes accessToken + role to client
+### Tailwind
+Custom design tokens defined in `tailwind.config.ts` (required — utility classes read from here, not from CSS variables):
 
-### `lib/api.ts`
-Axios instance:
-- `baseURL` = `NEXT_PUBLIC_API_URL`
-- Request interceptor: reads session, adds `Authorization: Bearer` header
-- Response interceptor: on 401, redirects to `/login`
+```ts
+colors: {
+  brand: "#1a1a2e",          // deep navy
+  "brand-light": "#252542",
+  "brand-accent": "#e94560",
+  "surface-2": "#f4f5f7",
+  "surface-3": "#ecedf0",
+  border: "#e4e5e9",
+  "text-primary": "#111118",
+  "text-secondary": "#5c5c70",
+  "text-muted": "#9898aa",
+}
+```
 
-### `middleware.ts`
-Runs on every non-static request:
-- Not logged in + not on `/login` → redirect to `/login`
-- Logged in + on `/login` → redirect to `/`
-- Excludes: `api/`, `_next/`, `track/`, `unsubscribe/`, `webhooks/`
+Fonts: `DM Sans` (headings/`font-display`), `Inter` (body/`font-sans`), `JetBrains Mono` (code/`font-mono`).
+
+### PostCSS
+`frontend/postcss.config.mjs` **must exist**. Without it Next.js does not run Tailwind — `@apply` and `@tailwind` directives are served raw and no styles apply.
+
+### Component classes (`globals.css`)
+`.btn-primary`, `.btn-ghost`, `.btn-danger`, `.input`, `.card`, `.badge`, `.badge-dot` — defined with `@apply` in `@layer components`.
+
+---
+
+## API client (`lib/api.ts`)
+
+Plain Axios instance pointing at `NEXT_PUBLIC_API_URL` (defaults to `http://localhost:5000`). No auth interceptors in dev mode.
